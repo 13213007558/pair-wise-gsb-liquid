@@ -107,7 +107,18 @@ module Liquid
           # Handle any interrupts if they exist.
           if context.interrupt?
             interrupt = context.pop_interrupt
-            break if interrupt.is_a?(BreakInterrupt)
+            case interrupt
+            when BreakInterrupt
+              # A labeled break targets an enclosing `for` loop: re-push it so
+              # the loop that carries the label can consume it.
+              context.push_interrupt(interrupt) if interrupt.label
+              break
+            when ContinueInterrupt
+              if interrupt.label
+                context.push_interrupt(interrupt)
+                break
+              end
+            end
           end
 
           if tablerowloop.col_last && !tablerowloop.last

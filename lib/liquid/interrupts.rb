@@ -11,8 +11,29 @@ module Liquid
   end
 
   # Interrupt that is thrown whenever a {% break %} is called.
-  class BreakInterrupt < Interrupt; end
+  #
+  # When the {% break %} tag names a loop label (ex: {% break outer %}), the
+  # interrupt carries that label so that only the matching `for` loop consumes
+  # it; intervening loops re-push it and unwind.
+  class BreakInterrupt < Interrupt
+    attr_reader :label
+
+    def initialize(label = nil)
+      @label = label
+      super()
+    end
+  end
 
   # Interrupt that is thrown whenever a {% continue %} is called.
-  class ContinueInterrupt < Interrupt; end
+  #
+  # Like BreakInterrupt, an optional loop label selects which enclosing `for`
+  # loop advances to its next iteration.
+  class ContinueInterrupt < Interrupt
+    attr_reader :label
+
+    def initialize(label = nil)
+      @label = label
+      super()
+    end
+  end
 end

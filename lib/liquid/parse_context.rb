@@ -24,8 +24,32 @@ module Liquid
         {}
       end
 
+      # Lexically scoped stack of labels declared by enclosing `for` loops.
+      # Used at parse time to resolve {% break label %} / {% continue label %}.
+      @for_label_stack        = []
+      @saved_for_label_stacks = []
+
       self.depth   = 0
       self.partial = false
+    end
+
+    # Called by the `for` tag when it starts parsing its body. Labels are
+    # lexically scoped: re-declaring a label that is already used by an
+    # enclosing `for` loop (shadowing) is a syntax error.
+    def push_for_label(label)
+      if @for_label_stack.include?(label)
+        raise SyntaxError, locale.t("errors.syntax.for_label_duplicate", label: label)
+      end
+      @for_label_stack.push(label)
+    end
+
+    def pop_for_label
+      @for_label_stack.pop
+    end
+
+    # Is `label` declared by a `for` loop currently being parsed?
+    def for_label?(label)
+      @for_label_stack.include?(label)
     end
 
     def [](option_key)
@@ -74,6 +98,16 @@ module Liquid
       @options = value ? partial_options : @template_options
 
       @error_mode = @options[:error_mode] || @environment.error_mode
+
+      # Loop labels are lexically scoped to a single template fragment: a
+      # {% break %}/{% continue %} inside a rendered partial must not be able
+      # to target a `for` loop of the including template.
+      if value
+        @saved_for_label_stacks.push(@for_label_stack)
+        @for_label_stack = []
+      else
+        @for_label_stack = @saved_for_label_stacks.pop || []
+      end
     end
 
     def partial_options

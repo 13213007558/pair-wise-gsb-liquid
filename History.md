@@ -1,5 +1,9 @@
 # Liquid Change Log
 
+## Unreleased
+
+* Add loop labels: `for` accepts a `label:` attribute and `break`/`continue` accept an optional target label (ex: `{% break outer %}`) to exit or advance an enclosing loop across nesting levels
+
 ## 5.14.0
 
 * Avoid materializing integer ranges in `for` and `tablerow` loops, and account for each visited range item [Ian Ker-Seymer]
