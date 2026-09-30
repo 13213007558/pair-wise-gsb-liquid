@@ -3,7 +3,7 @@
 module Liquid
   class ParseContext
     attr_accessor :locale, :line_number, :trim_whitespace, :depth
-    attr_reader :partial, :warnings, :error_mode, :environment
+    attr_reader :partial, :warnings, :error_mode, :environment, :for_label_stack
 
     def initialize(options = Const::EMPTY_HASH)
       @environment = options.fetch(:environment, Environment.default)
@@ -26,6 +26,11 @@ module Liquid
 
       self.depth   = 0
       self.partial = false
+
+      # Labels of the for loops currently being parsed, innermost last.
+      # Used to resolve {% break label %} / {% continue label %} targets
+      # lexically at parse time.
+      @for_label_stack = []
     end
 
     def [](option_key)
@@ -74,6 +79,17 @@ module Liquid
       @options = value ? partial_options : @template_options
 
       @error_mode = @options[:error_mode] || @environment.error_mode
+
+      if value
+        # A partial is a separate render fragment: loop labels declared
+        # outside of it are not visible inside, so a {% break %}/{% continue %}
+        # inside a partial can never target a loop of the including template.
+        @outer_for_label_stack = @for_label_stack
+        @for_label_stack = []
+      elsif @outer_for_label_stack
+        @for_label_stack = @outer_for_label_stack
+        @outer_for_label_stack = nil
+      end
     end
 
     def partial_options

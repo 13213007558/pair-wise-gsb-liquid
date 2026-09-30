@@ -13,6 +13,9 @@ module Liquid
   #
   #   > Tip:
   #   > Every `for` loop has an associated [`forloop` object](/docs/api/liquid/objects/forloop) with information about the loop.
+  #
+  #   A loop may declare a `label`, which lets an inner `{% break label %}` or
+  #   `{% continue label %}` target this loop directly instead of the innermost one.
   # @liquid_syntax
   #   {% for variable in array %}
   #     expression
@@ -24,29 +27,37 @@ module Liquid
   # @liquid_optional_param offset: [number] The 1-based index to start iterating at.
   # @liquid_optional_param range [untyped] A custom numeric range to iterate over.
   # @liquid_optional_param reversed [untyped] Iterate in reverse order.
+  # @liquid_optional_param label: [string] A label that `break` and `continue` can target.
   class For < Block
     Syntax = /\A(#{VariableSegment}+)\s+in\s+(#{QuotedFragment}+)\s*(reversed)?/o
 
-    attr_reader :collection_name, :variable_name, :limit, :from
+    LabelSyntax = /\A[a-zA-Z_][\w\-]*\z/
+
+    attr_reader :collection_name, :variable_name, :limit, :from, :label
 
     def initialize(tag_name, markup, options)
       super
-      @from = @limit = nil
+      @from = @limit = @label = nil
       parse_with_selected_parser(markup)
       @for_block = new_body
       @else_block = nil
     end
 
     def parse(tokens)
-      if parse_body(@for_block, tokens)
-        parse_body(@else_block, tokens)
+      push_label_scope
+      begin
+        if parse_body(@for_block, tokens)
+          parse_body(@else_block, tokens)
+        end
+        if blank?
+          @else_block&.remove_blank_strings
+          @for_block.remove_blank_strings
+        end
+        @else_block&.freeze
+        @for_block.freeze
+      ensure
+        pop_label_scope
       end
-      if blank?
-        @else_block&.remove_blank_strings
-        @for_block.remove_blank_strings
-      end
-      @else_block&.freeze
-      @for_block.freeze
     end
 
     def nodelist
@@ -100,11 +111,15 @@ module Liquid
 
       while p.look(:comma) || p.look(:id)
         p.consume?(:comma)
-        unless (attribute = p.id?('limit') || p.id?('offset'))
+        unless (attribute = p.id?('limit') || p.id?('offset') || p.id?('label'))
           raise SyntaxError, options[:locale].t("errors.syntax.for_invalid_attribute")
         end
         p.consume(:colon)
-        set_attribute(attribute, p.expression, safe: true)
+        if attribute == 'label'
+          set_attribute(attribute, p.consume(:id), safe: true)
+        else
+          set_attribute(attribute, p.expression, safe: true)
+        end
       end
       p.consume(:end_of_string)
     end
@@ -113,6 +128,23 @@ module Liquid
 
     def strict2_parse(markup)
       strict_parse(markup)
+    end
+
+    # Loop labels are resolved lexically: while this loop's body is parsed,
+    # its label is visible to nested {% break %}/{% continue %} tags.
+    def push_label_scope
+      return unless @label
+
+      stack = parse_context.for_label_stack
+      if stack.include?(@label)
+        raise SyntaxError, options[:locale].t("errors.syntax.for_duplicate_label", label: @label)
+      end
+      stack.push(@label)
+      @label_scope_pushed = true
+    end
+
+    def pop_label_scope
+      parse_context.for_label_stack.pop if @label_scope_pushed
     end
 
     def collection_segment(context)
@@ -168,6 +200,15 @@ module Liquid
             # Handle any interrupts if they exist.
             next unless context.interrupt?
             interrupt = context.pop_interrupt
+
+            if labeled_interrupt?(interrupt) && interrupt.label != @label
+              # The interrupt targets an enclosing loop. Stop iterating and
+              # re-queue the interrupt so the loop carrying that label (or
+              # the error handler, if there is none) can handle it.
+              context.push_interrupt(interrupt)
+              break
+            end
+
             break if interrupt.is_a?(BreakInterrupt)
             next if interrupt.is_a?(ContinueInterrupt)
           end
@@ -177,6 +218,10 @@ module Liquid
       end
 
       output
+    end
+
+    def labeled_interrupt?(interrupt)
+      interrupt.respond_to?(:label) && !interrupt.label.nil?
     end
 
     def set_attribute(key, expr, safe: false)
@@ -189,6 +234,11 @@ module Liquid
         end
       when 'limit'
         @limit = parse_expression(expr, safe: safe)
+      when 'label'
+        unless expr.is_a?(String) && expr.match?(LabelSyntax)
+          raise SyntaxError, options[:locale].t("errors.syntax.for_invalid_label", label: expr)
+        end
+        @label = expr
       end
     end
 

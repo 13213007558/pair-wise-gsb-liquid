@@ -107,6 +107,13 @@ module Liquid
           # Handle any interrupts if they exist.
           if context.interrupt?
             interrupt = context.pop_interrupt
+            if interrupt.respond_to?(:label) && interrupt.label
+              # tablerow loops cannot be labeled, so a labeled interrupt
+              # always targets an enclosing for loop: stop this loop and
+              # re-queue the interrupt so it keeps propagating outwards.
+              context.push_interrupt(interrupt)
+              break
+            end
             break if interrupt.is_a?(BreakInterrupt)
           end
 
