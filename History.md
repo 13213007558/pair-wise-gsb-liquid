@@ -1,5 +1,9 @@
 # Liquid Change Log
 
+## Unreleased
+
+* Add a `with` block tag that destructures an array or object into scoped local variables using nested array patterns, object key patterns, `*rest` patterns, and per-binding default expressions
+
 ## 5.14.0
 
 * Avoid materializing integer ranges in `for` and `tablerow` loops, and account for each visited range item [Ian Ker-Seymer]
