@@ -52,6 +52,9 @@ end
 require "liquid/version"
 require "liquid/deprecations"
 require "liquid/const"
+require 'liquid/safe_string'
+require 'liquid/html_escape'
+require 'liquid/html_context_tracker'
 require 'liquid/standardfilters'
 require 'liquid/file_system'
 require 'liquid/parser_switching'

@@ -28,6 +28,7 @@ module Liquid
 
     def initialize(tag_name, markup, options)
       super
+      @html_autoescape = options.html_autoescape?
       parse_with_selected_parser(markup)
     end
 
@@ -52,6 +53,9 @@ module Liquid
     def render_to_output_buffer(context, output)
       context.resource_limits.with_capture do
         capture_output = render(context)
+        # Captured content is fully rendered markup: mark it as safe HTML so
+        # that outputting it again does not escape it a second time.
+        capture_output = SafeString.new(capture_output, :html) if @html_autoescape
         context.scopes.last[@to] = capture_output
       end
       output

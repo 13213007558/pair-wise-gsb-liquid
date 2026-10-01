@@ -3,6 +3,7 @@
 module Liquid
   class ParseContext
     attr_accessor :locale, :line_number, :trim_whitespace, :depth
+    attr_writer :html_context_tracker
     attr_reader :partial, :warnings, :error_mode, :environment
 
     def initialize(options = Const::EMPTY_HASH)
@@ -87,6 +88,50 @@ module Liquid
           @template_options
         end
       end
+    end
+
+    # Whether HTML autoescaping is enabled for this parse, either through the
+    # template options or the environment.
+    def html_autoescape?
+      return @html_autoescape if defined?(@html_autoescape)
+
+      @html_autoescape = if @template_options.key?(:html_autoescape)
+        @template_options[:html_autoescape]
+      else
+        @environment.html_autoescape
+      end
+    end
+
+    # The tracker that follows the static HTML of the template so that each
+    # {{ }} output can be escaped for the context it appears in. Returns nil
+    # when HTML autoescaping is disabled.
+    def html_context_tracker
+      return nil unless html_autoescape?
+
+      @html_context_tracker ||= HtmlContextTracker.new
+    end
+
+    # Returns the HTML context (:text, :attr, or :url) for a {{ }} output at
+    # the current parse position, or nil when HTML autoescaping is disabled.
+    # Raises a SyntaxError for positions where no safe escaping exists
+    # (script/style content, event handler or style attributes, and unquoted
+    # attribute values) instead of guessing an escaping strategy.
+    def html_context_for_output
+      tracker = html_context_tracker
+      return nil unless tracker
+
+      context = tracker.current_context
+      if HtmlContextTracker::FORBIDDEN_CONTEXTS.include?(context)
+        description = case context
+        when :script then "a <script> element"
+        when :style then "a <style> element"
+        when :script_attr then "an event handler attribute"
+        when :style_attr then "a style attribute"
+        else "an unquoted attribute value or tag"
+        end
+        raise SyntaxError, "dynamic output is not allowed in #{description} when html_autoescape is enabled"
+      end
+      context
     end
   end
 end

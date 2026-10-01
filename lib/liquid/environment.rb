@@ -26,6 +26,13 @@ module Liquid
     # template can consume.
     attr_accessor :default_resource_limits
 
+    # When enabled, {{ }} outputs are automatically escaped according to the
+    # HTML context they appear in (text, quoted attribute, or URL attribute).
+    # Dynamic output in contexts where no safe escaping exists (script/style
+    # elements, event handler and style attributes, unquoted attributes) is
+    # rejected at parse time. Disabled by default.
+    attr_accessor :html_autoescape
+
     class << self
       # Creates a new environment instance.
       #
@@ -39,12 +46,13 @@ module Liquid
       #   render exceptions.
       # @yieldparam environment [Environment] The environment instance that is being built.
       # @return [Environment] The new environment instance.
-      def build(tags: nil, file_system: nil, error_mode: nil, exception_renderer: nil)
+      def build(tags: nil, file_system: nil, error_mode: nil, exception_renderer: nil, html_autoescape: nil)
         ret = new
         ret.tags = tags if tags
         ret.file_system = file_system if file_system
         ret.error_mode = error_mode if error_mode
         ret.exception_renderer = exception_renderer if exception_renderer
+        ret.html_autoescape = html_autoescape unless html_autoescape.nil?
         yield ret if block_given?
         ret.freeze
       end
@@ -82,6 +90,7 @@ module Liquid
       @exception_renderer = ->(exception) { exception }
       @file_system = BlankFileSystem.new
       @default_resource_limits = Const::EMPTY_HASH
+      @html_autoescape = false
       @strainer_template_class_cache = {}
     end
 

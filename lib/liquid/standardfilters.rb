@@ -105,7 +105,11 @@ module Liquid
     # @liquid_syntax string | escape
     # @liquid_return [string]
     def escape(input)
-      CGI.escapeHTML(Utils.to_s(input)) unless input.nil?
+      return if input.nil?
+      # Already-escaped content must not be escaped a second time.
+      return input if input.is_a?(SafeString)
+
+      SafeString.new(CGI.escapeHTML(Utils.to_s(input)), :html)
     end
     alias_method :h, :escape
 
@@ -117,7 +121,9 @@ module Liquid
     # @liquid_syntax string | escape_once
     # @liquid_return [string]
     def escape_once(input)
-      Utils.to_s(input).gsub(HTML_ESCAPE_ONCE_REGEXP, HTML_ESCAPE)
+      return input if input.is_a?(SafeString)
+
+      SafeString.new(Utils.to_s(input).gsub(HTML_ESCAPE_ONCE_REGEXP, HTML_ESCAPE), :html)
     end
 
     # @liquid_public_docs
@@ -132,7 +138,11 @@ module Liquid
     # @liquid_syntax string | url_encode
     # @liquid_return [string]
     def url_encode(input)
-      CGI.escape(Utils.to_s(input)) unless input.nil?
+      return if input.nil?
+
+      # Percent-encoded output contains no HTML-special characters and no
+      # URL scheme, so it is safe in URL attribute contexts as well.
+      SafeString.new(CGI.escape(Utils.to_s(input)), :url)
     end
 
     # @liquid_public_docs

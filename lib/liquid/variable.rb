@@ -19,6 +19,9 @@ module Liquid
     MarkupWithQuotedFragment = /(#{QuotedFragment})(.*)/om
 
     attr_accessor :filters, :name, :line_number
+    # The HTML context (:text, :attr, or :url) this output appears in when
+    # HTML autoescaping is enabled, or nil when it is disabled.
+    attr_accessor :html_context
     attr_reader :parse_context
     alias_method :options, :parse_context
 
@@ -123,6 +126,7 @@ module Liquid
           render_obj_to_output(o, output)
         end
       else
+        obj = HtmlEscape.escape_for(@html_context, obj) if @html_context
         output << Liquid::Utils.to_s(obj)
       end
     end

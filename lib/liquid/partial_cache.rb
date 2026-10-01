@@ -13,6 +13,11 @@ module Liquid
 
       parse_context.partial = true
 
+      # A partial is a standalone HTML fragment: track its HTML contexts
+      # independently of the including template.
+      previous_tracker = parse_context.html_context_tracker
+      parse_context.html_context_tracker = HtmlContextTracker.new if previous_tracker
+
       template_factory = context.registers[:template_factory]
       template = template_factory.for(template_name)
 
@@ -28,6 +33,7 @@ module Liquid
       cached_partials[cache_key] = partial
     ensure
       parse_context.partial = false
+      parse_context.html_context_tracker = previous_tracker if previous_tracker
     end
   end
 end

@@ -24,6 +24,7 @@ module Liquid
     def initialize(tag_name, markup, parse_context)
       super
       @variable = Variable.new(markup, parse_context)
+      @variable.html_context = parse_context.html_context_for_output
     end
 
     def render(context)

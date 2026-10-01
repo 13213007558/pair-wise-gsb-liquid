@@ -168,6 +168,7 @@ module Liquid
           parse_context.trim_whitespace = false
           @nodelist << token
           @blank &&= token.match?(WhitespaceOrNothing)
+          parse_context.html_context_tracker&.feed(token)
         end
         parse_context.line_number = tokenizer.line_number
       end
@@ -256,7 +257,9 @@ module Liquid
         markup_end = parse_end - i + 1
         markup = markup_end <= 0 ? "" : token.slice(i, markup_end)
 
-        return Variable.new(markup, parse_context)
+        variable = Variable.new(markup, parse_context)
+        variable.html_context = parse_context.html_context_for_output
+        return variable
       end
 
       BlockBody.raise_missing_variable_terminator(token, parse_context)
