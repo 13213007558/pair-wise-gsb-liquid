@@ -222,6 +222,18 @@ module Liquid
 
       context.resource_limits.increment_render_score(@nodelist.length)
 
+      if context.html_autoescape?
+        render_with_html_autoescape(context, output)
+      else
+        render_without_html_autoescape(context, output)
+      end
+
+      output
+    end
+
+    # Default render path (HTML auto-escaping disabled). Kept separate so the
+    # common case has no extra allocations or tag introspection.
+    def render_without_html_autoescape(context, output)
       idx = 0
       while (node = @nodelist[idx])
         if node.instance_of?(String)
@@ -237,8 +249,41 @@ module Liquid
 
         context.resource_limits.increment_write_score(output)
       end
+    end
 
-      output
+    # Render path with context aware HTML auto-escaping enabled.
+    #
+    # Static text determines the HTML context of the dynamic node that follows
+    # it, so text fragments are *deferred*: held back until just before the
+    # next dynamic node renders (a Variable or a tag that occupies an
+    # interpolation position such as capture/render) or the end of the body.
+    # Control flow tags (if/for/...) do not end the pending run, so text
+    # immediately before and after them is treated as contiguous, matching the
+    # document that is actually emitted.
+    def render_with_html_autoescape(context, output)
+      pending_text = +''
+      idx = 0
+      while (node = @nodelist[idx])
+        if node.instance_of?(String)
+          output << node
+          pending_text << node
+        else
+          if node.instance_of?(Variable) ||
+              (node.respond_to?(:html_interpolation?) && node.html_interpolation?)
+            context.html_feed(pending_text) unless pending_text.empty?
+            pending_text.clear
+          end
+          render_node(context, output, node)
+          # If we get an Interrupt that means the block must stop processing. An
+          # Interrupt is any command that stops block execution such as {% break %}
+          # or {% continue %}. These tags may also occur through Block or Include tags.
+          break if context.interrupt? # might have happened in a for-block
+        end
+        idx += 1
+
+        context.resource_limits.increment_write_score(output)
+      end
+      context.html_feed(pending_text) unless pending_text.empty?
     end
 
     private

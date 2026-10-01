@@ -105,25 +105,32 @@ module Liquid
         obj = context.invoke(filter_name, obj, *filter_args)
       end
 
-      context.apply_global_filter(obj)
+      obj = context.apply_global_filter(obj)
+      # A global filter can transform the value in arbitrary ways, so its
+      # output can no longer be trusted for any HTML context.
+      if context.global_filter && context.html_autoescape? && obj.is_a?(SafeString)
+        obj = obj.to_unsafe_string
+      end
+      obj
     end
 
     def render_to_output_buffer(context, output)
       obj = render(context)
-      render_obj_to_output(obj, output)
+      render_obj_to_output(obj, output, context)
       output
     end
 
-    def render_obj_to_output(obj, output)
+    def render_obj_to_output(obj, output, context = nil)
       case obj
       when NilClass
         # Do nothing
       when Array
         obj.each do |o|
-          render_obj_to_output(o, output)
+          render_obj_to_output(o, output, context)
         end
       else
-        output << Liquid::Utils.to_s(obj)
+        str = context && context.html_autoescape? ? context.html_emit(obj) : Liquid::Utils.to_s(obj)
+        output << str
       end
     end
 

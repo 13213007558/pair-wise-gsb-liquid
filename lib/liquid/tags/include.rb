@@ -59,19 +59,21 @@ module Liquid
         context.template_name = partial.name
         context.partial = true
 
-        context.stack do
-          @attributes.each do |key, value|
-            context[key] = context.evaluate(value)
-          end
+        context.html_inline_fragment(context) do
+          context.stack do
+            @attributes.each do |key, value|
+              context[key] = context.evaluate(value)
+            end
 
-          if variable.is_a?(Array)
-            variable.each do |var|
-              context[context_variable_name] = var
+            if variable.is_a?(Array)
+              variable.each do |var|
+                context[context_variable_name] = var
+                partial.render_to_output_buffer(context, output)
+              end
+            else
+              context[context_variable_name] = variable
               partial.render_to_output_buffer(context, output)
             end
-          else
-            context[context_variable_name] = variable
-            partial.render_to_output_buffer(context, output)
           end
         end
       ensure
@@ -87,6 +89,12 @@ module Liquid
 
     def for_loop?
       @is_for_loop
+    end
+
+    # An included partial is inserted at the tag's position as an inline
+    # fragment, so the preceding static text determines its starting context.
+    def html_interpolation?
+      true
     end
 
     def strict2_parse(markup)

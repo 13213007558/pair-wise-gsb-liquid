@@ -30,6 +30,11 @@ module Liquid
       @variable.render_to_output_buffer(context, +'')
     end
 
+    # echo outputs a value directly at its tag position, just like {{ ... }}.
+    def html_interpolation?
+      true
+    end
+
     class ParseTreeVisitor < Liquid::ParseTreeVisitor
       def children
         [@node.variable]

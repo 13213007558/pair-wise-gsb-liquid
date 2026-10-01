@@ -51,13 +51,25 @@ module Liquid
 
     def render_to_output_buffer(context, output)
       context.resource_limits.with_capture do
-        capture_output = render(context)
+        capture_output = if context.html_autoescape?
+          context.html_capture do |buffer|
+            @body.render_to_output_buffer(context, buffer)
+          end
+        else
+          render(context)
+        end
         context.scopes.last[@to] = capture_output
       end
       output
     end
 
     def blank?
+      true
+    end
+
+    # A capture tag sits at an interpolation position even though it emits
+    # nothing, so the preceding static text determines its safety category.
+    def html_interpolation?
       true
     end
   end

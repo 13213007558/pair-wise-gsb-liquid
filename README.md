@@ -118,6 +118,62 @@ This is useful for doing things like enabling strict mode only in the theme edit
 It is recommended that you enable `:strict` or `:warn` mode on new apps to stop invalid templates from being created.
 It is also recommended that you use it in the template editors of existing apps to give editors better error messages.
 
+### HTML auto-escaping
+
+By default Liquid renders values verbatim, so a template author must remember to
+use the `escape` filter anywhere user supplied text could otherwise be parsed as
+HTML. Liquid also offers an opt-in, context aware auto-escaping mode. It is
+disabled by default, so existing templates render exactly as before. Enable it
+per template at parse time (or at render time):
+
+```ruby
+Liquid::Template.parse(source, autoescape: true)
+# or
+template.render(assigns, autoescape: true)
+```
+
+Each dynamic value is escaped according to the position of its output tag:
+
+```liquid
+<p>{{ user_text }}</p>                       {# body text: & < > are escaped #}
+<a title="{{ user_text }}">…</a>             {# quoted attribute: quotes too #}
+<a href="{{ user_url }}">…</a>               {# URL: dangerous schemes rejected #}
+```
+
+URL-typed attributes (`href`, `src`, `action`, `poster`, …) only allow a small
+set of schemes (`http`, `https`, `ftp`, `mailto`, `tel`) or relative URLs, and
+percent-encode quote/markup characters. Values such as `javascript:…`,
+`data:…`, or `vbscript:…` raise `Liquid::UnsafeUrlError`.
+
+Positions for which no safe escaping transform exists reject dynamic values
+with `Liquid::AutoEscapeError` instead of guessing an escaping rule: inside
+`<script>`/`<style>`, in unquoted attribute values, HTML comments, tag or
+attribute names.
+
+Values that are already safe carry a trust category, so content is never
+escaped twice. The `escape`/`escape_once` filters, fragments built with
+`{% capture %}`, and snippets inserted with `{% render %}` propagate the
+category that matches where they were produced. Concatenating an untrusted
+string onto a safe one (e.g. `append`) demotes the whole result, and filters
+that are not known to be safe cause their output to be escaped again:
+
+```liquid
+{{ user_text | escape }}                       {# safe, not double escaped #}
+{% capture snippet %}<b>{{ user_text }}</b>{% endcapture %}
+<div>{{ snippet }}</div>                       {# snippet is body-safe #}
+{{ safe | append: user_controlled }}           {# whole value re-escaped #}
+```
+
+Custom filters are untrusted by default. A host application can declare a
+filter that preserves or establishes a safety category:
+
+```ruby
+Liquid::StrainerTemplate.safe_filter(:my_filter, :preserve)
+```
+
+The supported categories are `:escape`, `:url`, `:html_markup`, `:preserve`,
+and `:preserve_args`.
+
 ### Undefined variables and filters
 
 By default, the renderer doesn't raise or in any other way notify you if some variables or filters are missing, i.e. not passed to the `render` method.

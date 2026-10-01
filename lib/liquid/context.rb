@@ -16,6 +16,7 @@ module Liquid
   class Context
     attr_reader :scopes, :errors, :registers, :environments, :resource_limits, :static_registers, :static_environments
     attr_accessor :exception_renderer, :template_name, :partial, :global_filter, :strict_variables, :strict_filters, :environment
+    attr_accessor :html_autoescape, :html_escape_state
 
     # rubocop:disable Metrics/ParameterLists
     def self.build(environment: Environment.default, environments: {}, outer_scope: {}, registers: {}, rethrow_errors: false, resource_limits: nil, static_environments: {}, &block)
@@ -39,6 +40,11 @@ module Liquid
       @filters             = []
       @global_filter       = nil
       @disabled_tags       = {}
+
+      # HTML auto-escaping is opt-in and disabled by default. When enabled the
+      # shared state machine tracks the HTML context of the output stream.
+      @html_autoescape     = false
+      @html_escape_state   = HtmlAutoEscape::State.new
 
       # Instead of constructing new StringScanner objects for each Expression parse,
       # we recycle the same one.
@@ -80,6 +86,71 @@ module Liquid
 
     def apply_global_filter(obj)
       global_filter.nil? ? obj : global_filter.call(obj)
+    end
+
+    # True when the opt-in context aware HTML auto-escaping mode is active for
+    # this render run.
+    def html_autoescape?
+      @html_autoescape == true
+    end
+
+    # Renders a capture block. The capture tag occupies an interpolation
+    # position in the surrounding document, so its opening category is
+    # determined from the current state, the body is rendered against a
+    # seeded state for that context and the result is labelled with the
+    # resulting safety category.
+    def html_capture
+      category = @html_escape_state.capture_interpolation_category
+      captured = +''
+      parent_state = @html_escape_state
+      # The captured fragment starts in the context of the capture position,
+      # just like a rendered partial: a capture inside a quoted attribute is
+      # an attribute fragment, inside a URL attribute a URL fragment.
+      @html_escape_state = HtmlAutoEscape::State.seeded_for(category)
+      begin
+        yield captured
+      ensure
+        @html_escape_state = parent_state
+      end
+      category.nil? ? captured : SafeString.new(captured, category)
+    end
+
+    # Renders an inline partial at the current interpolation position. The
+    # partial gets a fresh HTML state seeded for the position's context; the
+    # parent state is restored afterwards so surrounding template text keeps
+    # parsing correctly regardless of what the partial contained. Nested
+    # fragments save/restore independently.
+    def html_inline_fragment(inner_context)
+      return yield unless html_autoescape?
+
+      category = @html_escape_state.interpolation_category
+      parent_state = @html_escape_state
+      fragment_state = HtmlAutoEscape::State.seeded_for(category)
+      @html_escape_state = fragment_state
+      inner_context.html_escape_state = fragment_state
+      begin
+        yield
+      ensure
+        # Always restore the exact state active when this fragment opened,
+        # even when an inner fragment already swapped the shared object.
+        @html_escape_state = parent_state
+        inner_context.html_escape_state = parent_state
+      end
+    end
+
+    # Emits a fully evaluated dynamic value, escaping it according to the
+    # current HTML context. Returns the raw string representation unchanged
+    # when auto-escaping is not enabled.
+    def html_emit(obj)
+      return Liquid::Utils.to_s(obj) unless html_autoescape?
+
+      @html_escape_state.emit(obj)
+    end
+
+    # Feeds raw template text through the HTML state machine so the context of
+    # following output tags is known.
+    def html_feed(text)
+      @html_escape_state.feed(text) if html_autoescape?
     end
 
     # are there any not handled interrupts?
@@ -159,6 +230,11 @@ module Liquid
         subcontext.errors   = errors
         subcontext.warnings = warnings
         subcontext.disabled_tags = @disabled_tags
+        # Partials are rendered as inline fragments: they keep the autoescape
+        # flag but get their own state, which is seeded/restored by
+        # Context#html_inline_fragment around the render.
+        subcontext.html_autoescape = @html_autoescape
+        subcontext.html_escape_state = HtmlAutoEscape::State.new
       end
     end
 

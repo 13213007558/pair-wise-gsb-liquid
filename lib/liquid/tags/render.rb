@@ -42,6 +42,12 @@ module Liquid
       @is_for_loop
     end
 
+    # A rendered partial is inserted at the tag's position as an inline
+    # fragment, so the preceding static text determines its starting context.
+    def html_interpolation?
+      true
+    end
+
     def render_to_output_buffer(context, output)
       render_tag(context, output)
     end
@@ -69,7 +75,9 @@ module Liquid
           inner_context[key] = context.evaluate(value)
         end
         inner_context[context_variable_name] = var unless var.nil?
-        partial.render_to_output_buffer(inner_context, output)
+        context.html_inline_fragment(inner_context) do
+          partial.render_to_output_buffer(inner_context, output)
+        end
         forloop&.send(:increment!)
       }
 

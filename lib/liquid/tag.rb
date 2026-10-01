@@ -66,6 +66,15 @@ module Liquid
       false
     end
 
+    # Whether this tag occupies a dynamic interpolation position in the output
+    # stream when HTML auto-escaping is enabled. Most tags emit nothing (or
+    # control flow) and return false; tags that render inline content at their
+    # own position (capture, render) override this to true so the static text
+    # preceding them is fed before they render.
+    def html_interpolation?
+      false
+    end
+
     private
 
     def safe_parse_expression(parser)

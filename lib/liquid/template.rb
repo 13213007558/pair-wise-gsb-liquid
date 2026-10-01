@@ -164,6 +164,7 @@ module Liquid
       end
 
       output = nil
+      options = {}
 
       case args.last
       when Hash
@@ -174,11 +175,13 @@ module Liquid
         options[:registers]&.each do |key, register|
           static_registers[key] = register
         end
-
-        apply_options_to_context(context, options)
       when Module, Array
         context.add_filters(args.pop)
       end
+
+      # Parse-time options (such as auto-escaping) are always applied, even
+      # when render is called without an options hash.
+      apply_options_to_context(context, options)
 
       # Retrying a render resets resource usage
       context.resource_limits.reset
@@ -235,6 +238,7 @@ module Liquid
 
       @warnings = parse_context.warnings
       @error_mode = parse_context.error_mode
+      @autoescape = parse_context.autoescape
       parse_context
     end
 
@@ -244,6 +248,9 @@ module Liquid
       context.exception_renderer = options[:exception_renderer] if options[:exception_renderer]
       context.strict_variables   = options[:strict_variables] if options[:strict_variables]
       context.strict_filters     = options[:strict_filters] if options[:strict_filters]
+      # Auto-escaping may be requested at parse time or at render time. The
+      # default is off, preserving Liquid's historical rendering behaviour.
+      context.html_autoescape    = @autoescape || options[:autoescape] == true
     end
   end
 end

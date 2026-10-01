@@ -3,12 +3,13 @@
 module Liquid
   class ParseContext
     attr_accessor :locale, :line_number, :trim_whitespace, :depth
-    attr_reader :partial, :warnings, :error_mode, :environment
+    attr_reader :partial, :warnings, :error_mode, :environment, :autoescape
 
     def initialize(options = Const::EMPTY_HASH)
       @environment = options.fetch(:environment, Environment.default)
       @template_options = options ? options.dup : {}
 
+      @autoescape = @template_options[:autoescape] == true
       @locale   = @template_options[:locale] ||= I18n.new
       @warnings = []
 

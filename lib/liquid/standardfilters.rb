@@ -105,6 +105,7 @@ module Liquid
     # @liquid_syntax string | escape
     # @liquid_return [string]
     def escape(input)
+      return input if input.is_a?(SafeString)
       CGI.escapeHTML(Utils.to_s(input)) unless input.nil?
     end
     alias_method :h, :escape
@@ -117,6 +118,7 @@ module Liquid
     # @liquid_syntax string | escape_once
     # @liquid_return [string]
     def escape_once(input)
+      return input if input.is_a?(SafeString)
       Utils.to_s(input).gsub(HTML_ESCAPE_ONCE_REGEXP, HTML_ESCAPE)
     end
 

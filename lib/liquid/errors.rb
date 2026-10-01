@@ -56,4 +56,12 @@ module Liquid
   DisabledError         = Class.new(Error)
   InternalError         = Class.new(Error)
   TemplateEncodingError = Class.new(Error)
+
+  # Base class for errors raised by the opt-in HTML auto-escaping mode when a
+  # dynamic value is used in an HTML position for which no safe escaping
+  # transform exists (inside <script>/<style>, an unquoted attribute, ...).
+  AutoEscapeError       = Class.new(Error)
+  # Raised when a dynamic value used as a URL attribute uses a protocol that
+  # is not on the allow list (e.g. javascript:, data:, vbscript:).
+  UnsafeUrlError        = Class.new(AutoEscapeError)
 end
