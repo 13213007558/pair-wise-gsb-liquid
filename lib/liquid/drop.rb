@@ -48,6 +48,15 @@ module Liquid
       true
     end
 
+    # Whether reads of this drop may be memoized by the render read
+    # snapshot (see Liquid::Context#drop_read_snapshot=). Drops whose
+    # values change while a single render is still in progress - like
+    # Liquid's own loop drops - must return false so that templates keep
+    # seeing fresh values.
+    def snapshot_cacheable?
+      true
+    end
+
     def inspect
       self.class.to_s
     end

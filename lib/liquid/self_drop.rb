@@ -35,6 +35,13 @@ module Liquid
       self
     end
 
+    # Reads through `self` resolve against the context's scopes, which
+    # change while a render is in progress, so they must never be
+    # memoized by the render read snapshot.
+    def snapshot_cacheable?
+      false
+    end
+
     def ==(other)
       other.is_a?(SelfDrop) && other.self_context.equal?(@self_context)
     end

@@ -80,6 +80,12 @@ module Liquid
       @index == @length - 1
     end
 
+    # Loop state changes while a render is in progress, so reads of this
+    # drop must never be memoized by the render read snapshot.
+    def snapshot_cacheable?
+      false
+    end
+
     protected
 
     def increment!

@@ -39,6 +39,7 @@ module Liquid
       @filters             = []
       @global_filter       = nil
       @disabled_tags       = {}
+      @drop_read_snapshot  = nil
 
       # Instead of constructing new StringScanner objects for each Expression parse,
       # we recycle the same one.
@@ -62,6 +63,22 @@ module Liquid
 
     def warnings
       @warnings ||= []
+    end
+
+    # The render read snapshot store for this context, or nil when the
+    # snapshot is disabled. See #drop_read_snapshot=.
+    attr_reader :drop_read_snapshot
+
+    # Enables or disables the render read snapshot.
+    #
+    # When enabled, the first evaluation of a logical drop path (e.g.
+    # `report.amount`) is memoized for the rest of this render, so reading
+    # the same path again returns the identical result - including nil and
+    # missing values - without invoking the drop a second time. Nested
+    # renders via the `render` tag share this snapshot, while each new
+    # render starts with a fresh one.
+    def drop_read_snapshot=(enabled)
+      @drop_read_snapshot = enabled ? {} : nil
     end
 
     def strainer
@@ -159,6 +176,8 @@ module Liquid
         subcontext.errors   = errors
         subcontext.warnings = warnings
         subcontext.disabled_tags = @disabled_tags
+        # Nested renders share the render read snapshot of this render.
+        subcontext.drop_read_snapshot_store = @drop_read_snapshot
       end
     end
 
@@ -263,6 +282,12 @@ module Liquid
     protected
 
     attr_writer :base_scope_depth, :warnings, :errors, :strainer, :filters, :disabled_tags
+
+    # Shares the render read snapshot store with a subcontext. Not part of
+    # the public API; use #drop_read_snapshot= to enable the snapshot.
+    def drop_read_snapshot_store=(store) # :nodoc:
+      @drop_read_snapshot = store
+    end
 
     private
 

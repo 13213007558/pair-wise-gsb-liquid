@@ -48,11 +48,41 @@ module Liquid
       name   = context.evaluate(@name)
       object = context.find_variable(name)
 
+      # When the render read snapshot is enabled on the context, reads
+      # through drops are memoized per logical path for the rest of this
+      # render. `reads` is the cache for this root name and `path` tracks
+      # the lookup keys evaluated so far.
+      reads = snapshot_reads(context, name, object)
+      path = reads ? [] : nil
+      cacheable_path = true
+
       @lookups.each_index do |i|
         key = context.evaluate(@lookups[i])
 
         # Cast "key" to its liquid value to enable it to act as a primitive value
         key = Liquid::Utils.to_liquid_value(key)
+
+        cache_key = nil
+        if reads
+          path += [key]
+
+          if cacheable_path && object.is_a?(Liquid::Drop)
+            if object.snapshot_cacheable?
+              if reads.key?(path)
+                # This logical path was already evaluated during this
+                # render; reuse the first result (which may be nil).
+                object = reads[path]
+                object.context = context if object.respond_to?(:context=)
+                next
+              end
+              cache_key = path
+            else
+              # Drops with internal mutable state (e.g. forloop) must not
+              # be cached, and neither may anything resolved through them.
+              cacheable_path = false
+            end
+          end
+        end
 
         # If object is a hash- or array-like object we look for the
         # presence of the key and if its available we return it
@@ -83,6 +113,8 @@ module Liquid
           raise Liquid::UndefinedVariable, "undefined variable #{key}"
         end
 
+        reads[cache_key] = object if cache_key
+
         # If we are dealing with a drop here we have to
         object.context = context if object.respond_to?(:context=)
       end
@@ -98,6 +130,27 @@ module Liquid
 
     def state
       [@name, @lookups, @command_flags]
+    end
+
+    private
+
+    # Returns the per-render read cache for the root of this lookup chain
+    # when the render read snapshot is enabled, or nil when it is not.
+    def snapshot_reads(context, name, object)
+      return if @lookups.empty?
+
+      snapshot = context.drop_read_snapshot
+      return unless snapshot
+
+      entry = snapshot[name]
+      # The cached reads are only valid while the root name still resolves
+      # to the very same object; scopes may rebind a name (e.g. a for-loop
+      # variable) to a different object during a single render.
+      return entry[1] if entry && entry[0].equal?(object)
+
+      reads = {}
+      snapshot[name] = [object, reads]
+      reads
     end
 
     class ParseTreeVisitor < Liquid::ParseTreeVisitor

@@ -137,6 +137,9 @@ module Liquid
     #  * <tt>filters</tt> : array with local filters
     #  * <tt>registers</tt> : hash with register variables. Those can be accessed from
     #    filters and tags and might be useful to integrate liquid more with its host application
+    #  * <tt>drop_read_snapshot</tt> : when true, the first read of a logical drop path
+    #    (e.g. <tt>report.amount</tt>) is memoized for the rest of this render, so repeated
+    #    reads of the same path return the identical result without invoking the drop again
     #
     def render(*args)
       return '' if @root.nil?
@@ -244,6 +247,8 @@ module Liquid
       context.exception_renderer = options[:exception_renderer] if options[:exception_renderer]
       context.strict_variables   = options[:strict_variables] if options[:strict_variables]
       context.strict_filters     = options[:strict_filters] if options[:strict_filters]
+      # Each render with this option starts from a fresh read snapshot.
+      context.drop_read_snapshot = options[:drop_read_snapshot] if options.key?(:drop_read_snapshot)
     end
   end
 end
