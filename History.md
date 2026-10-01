@@ -1,5 +1,9 @@
 # Liquid Change Log
 
+## Unreleased
+
+* Add an optional `snapshot_drops` render option that memoizes drop property reads for the duration of a render (including nested `render` tags), so repeated reads of the same drop path return the first result even when the backing data changes mid-render
+
 ## 5.14.0
 
 * Avoid materializing integer ranges in `for` and `tablerow` loops, and account for each visited range item [Ian Ker-Seymer]

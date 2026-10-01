@@ -37,10 +37,11 @@ module Liquid
 
     # called by liquid to invoke a drop
     def invoke_drop(method_or_key)
-      if self.class.invokable?(method_or_key)
-        send(method_or_key)
-      else
-        liquid_method_missing(method_or_key)
+      snapshot = @context&.drop_read_snapshot
+      return invoke_drop_method(method_or_key) if snapshot.nil?
+
+      snapshot.fetch(self, method_or_key.to_s) do
+        invoke_drop_method(method_or_key)
       end
     end
 
@@ -78,6 +79,16 @@ module Liquid
 
         whitelist = [:to_liquid] + (public_instance_methods - blacklist)
         Set.new(whitelist.map(&:to_s))
+      end
+    end
+
+    private
+
+    def invoke_drop_method(method_or_key)
+      if self.class.invokable?(method_or_key)
+        send(method_or_key)
+      else
+        liquid_method_missing(method_or_key)
       end
     end
   end
