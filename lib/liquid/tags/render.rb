@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'slot'
+
 module Liquid
   # @liquid_public_docs
   # @liquid_type tag
@@ -22,16 +24,30 @@ module Liquid
   #   > Note:
   #   > When you render a snippet using the `render` tag, you can't use the [`include` tag](/docs/api/liquid/tags/include)
   #   > inside the snippet.
+  #
+  #   ### Content slots
+  #
+  #   A render call can optionally use a body ending with `{% endrender %}` to supply named
+  #   [slots](/docs/api/liquid/tags/slot) to the snippet:
+  #
+  #   ```liquid
+  #   {% render 'card' %}
+  #     {% slot actions %}<a href="/buy">Buy</a>{% endslot %}
+  #   {% endrender %}
+  #   ```
+  #
+  #   Slot content is evaluated lazily (only when the snippet renders the slot) in the caller's scope, so it can read
+  #   the caller's variables while variables created inside the snippet stay private.
   # @liquid_syntax
   #   {% render 'filename' %}
   # @liquid_syntax_keyword filename The name of the snippet to render, without the `.liquid` extension.
-  class Render < Tag
+  class Render < Block
     FOR = 'for'
     SYNTAX = /(#{QuotedString}+)(\s+(with|#{FOR})\s+(#{QuotedFragment}+))?(\s+(?:as)\s+(#{VariableSegment}+))?/o
 
     disable_tags "include"
 
-    attr_reader :template_name_expr, :variable_name_expr, :attributes, :alias_name
+    attr_reader :template_name_expr, :variable_name_expr, :attributes, :alias_name, :slots
 
     def initialize(tag_name, markup, options)
       super
@@ -40,6 +56,49 @@ module Liquid
 
     def for_loop?
       @is_for_loop
+    end
+
+    def blank?
+      false
+    end
+
+    def nodelist
+      @has_body ? super : []
+    end
+
+    # Kept for the Tag#render interface and custom tags that call #render.
+    def render(context)
+      render_to_output_buffer(context, +'')
+    end
+
+    # Render is usually a single, body-less tag, but it can optionally take a
+    # body of slot blocks closed by `endrender`. Since such a body may only
+    # contain `slot` tags (and whitespace), we look at the token right after
+    # the tag: a `slot` tag means block form, anything else means a regular
+    # body-less render and leaves the remaining tokens untouched.
+    def parse(tokens)
+      if block_form?(tokens)
+        @has_body = true
+        @slots = {}
+        super
+        validate_slot_body!
+      else
+        @has_body = false
+        @slots = nil
+      end
+    end
+
+    def block_name
+      'render'
+    end
+
+    def block_delimiter
+      'endrender'
+    end
+
+    # The body of a block-form render may only contain `slot` blocks.
+    def unknown_tag(tag_name, _markup, _tokenizer)
+      raise SyntaxError, parse_context.locale.t("errors.syntax.render_only_slot_tags", tag: tag_name)
     end
 
     def render_to_output_buffer(context, output)
@@ -65,10 +124,15 @@ module Liquid
         inner_context.partial       = true
         inner_context['forloop']    = forloop if forloop
 
+        attribute_values = {}
         @attributes.each do |key, value|
-          inner_context[key] = context.evaluate(value)
+          attribute_values[key] = context.evaluate(value)
+          inner_context[key] = attribute_values[key]
         end
         inner_context[context_variable_name] = var unless var.nil?
+
+        build_slot_invocations!(inner_context, context, attribute_values, var, forloop, context_variable_name)
+
         partial.render_to_output_buffer(inner_context, output)
         forloop&.send(:increment!)
       }
@@ -140,6 +204,61 @@ module Liquid
           @node.variable_name_expr,
         ] + @node.attributes.values
       end
+    end
+
+    private
+
+    # A render tag opens a body only when the first non-whitespace token
+    # following it is a `slot` tag.
+    def block_form?(tokens)
+      ahead = 0
+      while (token = tokens.peek(ahead))
+        unless token.strip.empty?
+          match = token.match(BlockBody::FullToken)
+          return !match.nil? && match[2] == 'slot'
+        end
+
+        ahead += 1
+      end
+      false
+    end
+
+    def validate_slot_body!
+      @body.nodelist.each do |node|
+        next if node.is_a?(Liquid::Slot) || node.instance_of?(String) && node.strip.empty?
+
+        tag = node.respond_to?(:tag_name) ? node.tag_name : node.inspect
+        raise SyntaxError, parse_context.locale.t("errors.syntax.render_only_slot_tags", tag: tag)
+      end
+
+      @body.nodelist.each do |node|
+        next unless node.is_a?(Liquid::Slot)
+
+        name = node.slot_name
+        if @slots.key?(name)
+          raise SyntaxError, parse_context.locale.t("errors.syntax.render_duplicate_slot", name: name)
+        end
+
+        @slots[name] = node
+      end
+    end
+
+    # Gives the snippet a name -> Slot::Invocation map. Each invocation
+    # captures the caller's context and this iteration's parameter bindings;
+    # the snippet can then evaluate a slot any number of times, each time in a
+    # fresh frame with independent bindings.
+    def build_slot_invocations!(inner_context, caller_context, attribute_values, var, forloop, context_variable_name)
+      return unless @has_body
+
+      slot_base_scope = attribute_values.dup
+      slot_base_scope[context_variable_name] = var unless var.nil?
+      slot_base_scope['forloop'] = forloop if forloop
+
+      invocations = {}
+      @slots.each do |name, slot_node|
+        invocations[name] = Slot::Invocation.new(slot_node.slot_body, caller_context, slot_base_scope)
+      end
+      inner_context.set_render_slots(invocations)
     end
   end
 end

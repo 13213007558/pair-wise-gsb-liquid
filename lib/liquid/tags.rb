@@ -18,6 +18,7 @@ require_relative "tags/increment"
 require_relative "tags/comment"
 require_relative "tags/raw"
 require_relative "tags/render"
+require_relative "tags/slot"
 require_relative "tags/cycle"
 require_relative "tags/doc"
 
@@ -26,6 +27,7 @@ module Liquid
     STANDARD_TAGS = {
       'cycle' => Cycle,
       'render' => Render,
+      'slot' => Slot,
       'raw' => Raw,
       'comment' => Comment,
       'increment' => Increment,

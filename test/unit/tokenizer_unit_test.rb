@@ -35,6 +35,27 @@ class TokenizerTest < Minitest::Test
     assert_equal([], tokenize(nil))
   end
 
+  def test_peek_does_not_consume_tokens
+    tokenizer = new_tokenizer('{{ a }} {{ b }}')
+    assert_equal('{{ a }}', tokenizer.peek)
+    assert_equal('{{ a }}', tokenizer.peek)
+    assert_equal('{{ a }}', tokenizer.shift)
+    assert_equal(' ', tokenizer.peek)
+    tokenizer.shift
+    assert_equal('{{ b }}', tokenizer.peek)
+  end
+
+  def test_peek_lookahead
+    tokenizer = new_tokenizer('{{ a }} {{ b }}')
+    assert_equal('{{ a }}', tokenizer.peek(0))
+    assert_equal(' ', tokenizer.peek(1))
+    assert_equal('{{ b }}', tokenizer.peek(2))
+    assert_nil(tokenizer.peek(3))
+    assert_equal('{{ a }}', tokenizer.shift)
+    assert_equal(' ', tokenizer.peek(0))
+    assert_equal('{{ b }}', tokenizer.peek(1))
+  end
+
   def test_incomplete_curly_braces
     assert_equal(["{{.}", " "], tokenize('{{.} '))
     assert_equal(["{{}", "%}"], tokenize('{{}%}'))

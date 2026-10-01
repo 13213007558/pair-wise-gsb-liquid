@@ -48,6 +48,12 @@ module Liquid
       token
     end
 
+    # Returns a token without consuming it. Tokens are eagerly tokenized, so
+    # this lets tags look ahead to decide how to parse before shifting.
+    def peek(ahead = 0)
+      @tokens[@offset + ahead]
+    end
+
     private
 
     def tokenize

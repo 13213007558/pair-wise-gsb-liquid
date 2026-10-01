@@ -141,6 +141,28 @@ module Liquid
       pop
     end
 
+    # Runs the block inside an ephemeral assignment scope. Unlike {#stack},
+    # this isolates variable *assignments* too.
+    #
+    # In Liquid, variable lookup scans the scopes from the innermost
+    # ({#scopes}.first) outwards, while `{% assign %}` / `{% capture %}` always
+    # target the outermost scope ({#scopes}.last) so assigns are template
+    # global. While rendering a slot we install a single fresh hash at *both*
+    # positions: seeded from a snapshot of the caller's assignments merged
+    # with the slot bindings, it takes precedence on lookup (so slot
+    # assignments shadow the caller only for this render) and catches
+    # assignments so they are discarded afterwards and never leak out or
+    # bleed into another use/iteration. The caller's real scopes remain in
+    # between, so variables the caller merely *reads* are still visible.
+    def with_isolated_assigns(base_scope = {})
+      saved_scopes   = @scopes
+      isolated_scope = saved_scopes.last.dup.merge(base_scope)
+      @scopes = [isolated_scope] + saved_scopes + [isolated_scope]
+      yield
+    ensure
+      @scopes = saved_scopes
+    end
+
     # Creates a new context inheriting resource limits, filters, environment etc.,
     # but with an isolated scope.
     def new_isolated_subcontext
@@ -169,6 +191,13 @@ module Liquid
     # Only allow String, Numeric, Hash, Array, Proc, Boolean or <tt>Liquid::Drop</tt>
     def []=(key, value)
       @scopes[0][key] = value
+    end
+
+    # Stores the named slot invocations supplied by a `render` call. It lives
+    # in the innermost (isolated) scope of the rendered snippet, so nested
+    # snippets rendered from within the snippet never inherit it.
+    def set_render_slots(slots)
+      @scopes[0][Slot::RENDER_SLOTS_KEY] = slots
     end
 
     # Look up variable, either resolve directly after considering the name. We can directly handle
