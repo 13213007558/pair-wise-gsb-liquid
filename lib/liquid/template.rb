@@ -164,11 +164,13 @@ module Liquid
       end
 
       output = nil
+      provenance_tracker = nil
 
       case args.last
       when Hash
         options = args.pop
         output  = options[:output] if options[:output]
+        provenance_tracker = options[:provenance]
         static_registers = context.registers.static
 
         options[:registers]&.each do |key, register|
@@ -192,6 +194,9 @@ module Liquid
       previous_error_mode = context.registers.static[:template_error_mode]
       context.registers.static[:template_error_mode] = @error_mode
 
+      previous_provenance = context.registers.static[:provenance]
+      context.registers.static[:provenance] = provenance_tracker if provenance_tracker
+
       begin
         # render the nodelist.
         @root.render_to_output_buffer(context, output || +'')
@@ -203,8 +208,40 @@ module Liquid
         else
           context.registers.static.delete(:template_error_mode)
         end
+        if provenance_tracker
+          if previous_provenance
+            context.registers.static[:provenance] = previous_provenance
+          else
+            context.registers.static.delete(:provenance)
+          end
+        end
         @errors = context.errors
       end
+    end
+
+    # Renders the template like #render, but additionally tracks the
+    # provenance of the rendered output. Returns a Liquid::Provenance::Result
+    # bundling the rendered String and a Liquid::Provenance::Map that can be
+    # queried for the origin (variable, template, line, filters) of any byte
+    # range of the output.
+    #
+    # Pass `line_numbers: true` to Template.parse to get line numbers in the
+    # provenance map.
+    #
+    #   template = Liquid::Template.parse(source, line_numbers: true)
+    #   result   = template.render_with_provenance('name' => 'bob')
+    #   result.output                  #=> rendered String
+    #   result.provenance.query(0...3) #=> spans describing those bytes
+    def render_with_provenance(*args)
+      tracker = Liquid::Provenance::Tracker.new
+      output = if args.empty?
+        render(nil, provenance: tracker)
+      elsif args.length > 1 && args.last.is_a?(Hash)
+        render(*args[0..-2], args.last.merge(provenance: tracker))
+      else
+        render(*args, provenance: tracker)
+      end
+      Liquid::Provenance::Result.new(output, Liquid::Provenance::Map.new(tracker.spans))
     end
 
     def render!(*args)

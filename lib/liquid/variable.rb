@@ -100,6 +100,10 @@ module Liquid
     def render(context)
       obj = context.evaluate(@name)
 
+      if (tracker = context.provenance)
+        return tracker.to_value(tracked_evaluate(context, tracker, obj))
+      end
+
       @filters.each do |filter_name, filter_args, filter_kwargs|
         filter_args = evaluate_filter_expressions(context, filter_args, filter_kwargs)
         obj = context.invoke(filter_name, obj, *filter_args)
@@ -109,6 +113,12 @@ module Liquid
     end
 
     def render_to_output_buffer(context, output)
+      if (tracker = context.provenance)
+        evaluation = tracked_evaluate(context, tracker, context.evaluate(@name))
+        tracker.write(evaluation, output)
+        return output
+      end
+
       obj = render(context)
       render_obj_to_output(obj, output)
       output
@@ -136,6 +146,25 @@ module Liquid
     end
 
     private
+
+    # Evaluates the expression and its filters while a provenance tracker is
+    # active, returning a Liquid::Provenance::Evaluation.
+    def tracked_evaluate(context, tracker, obj)
+      evaluation = tracker.initial_evaluation(@name, obj, context, self)
+
+      @filters.each do |filter_name, filter_args, filter_kwargs|
+        raw_args = filter_args
+        evaluated_args = evaluate_filter_expressions(context, filter_args, filter_kwargs)
+        evaluation = tracker.apply_filter(evaluation, filter_name, evaluated_args, raw_args) do |input|
+          context.invoke(filter_name, input, *evaluated_args)
+        end
+      end
+
+      obj = evaluation.value
+      global = context.apply_global_filter(obj)
+      evaluation = tracker.apply_global_filter(evaluation, global) unless global.equal?(obj)
+      evaluation
+    end
 
     def lax_parse_filter_expressions(filter_name, unparsed_args)
       filter_args  = []

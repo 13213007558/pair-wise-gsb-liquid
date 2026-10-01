@@ -100,7 +100,13 @@ module Liquid
           context[@variable_name] = item
 
           output << "<td class=\"col#{tablerowloop.col}\">"
-          super
+          if context.provenance
+            # Render the body directly into the output so provenance spans
+            # are recorded against the right offsets.
+            @body.render_to_output_buffer(context, output)
+          else
+            super
+          end
           output << '</td>'
           context.resource_limits.increment_write_score(output)
 

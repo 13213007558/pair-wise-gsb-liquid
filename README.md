@@ -161,3 +161,32 @@ output and does not by itself limit CPU work for output-free loops.
 To help track usages of a feature or code path in production, we have released opt-in usage tracking. To enable this, we provide an empty `Liquid:: Usage.increment` method which you can customize to your needs. The feature is well suited to https://github.com/Shopify/statsd-instrument. However, the choice of implementation is up to you.
 
 Once you have enabled usage tracking, we recommend reporting any events through Github Issues that your system may be logging. It is highly likely this event has been added to consider deprecating or improving code specific to this event, so please raise any concerns.
+
+### Output provenance (source map)
+
+When debugging a rendered result, you can ask Liquid to record where each byte of the
+output came from. Normal rendering is unaffected and keeps returning a plain string;
+provenance tracking is strictly opt-in via `render_with_provenance`:
+
+```ruby
+template = Liquid::Template.parse("Hello {{ name | upcase }}!", line_numbers: true)
+result   = template.render_with_provenance('name' => 'bob')
+
+result.output                 # => "Hello BOB!"
+result.provenance.query(6...9) # => spans describing those bytes
+```
+
+Each returned span reports the output byte range, the source expression
+(`source.variable`), the template/partial name and line number, the byte range within
+the source value (`source.input_range`), and the filters the value passed through.
+
+Tracking follows values through `{% assign %}`, `{% capture %}`, `{% render ... param: value %}`
+and loops. Filters can declare an exact byte-level mapping with
+`Liquid::Provenance.register_filter_mapper` (mappings for `upcase`, `downcase`,
+`capitalize`, `strip`/`lstrip`/`rstrip`, `append`, `prepend`, `truncate`, `slice` and
+`default` are built in). Filters without a declared mapping mark the whole output as
+depending on all input sources (`span.exact? == false`) instead of fabricating a
+character-by-character correspondence.
+
+The provenance map stores metadata only (names, positions, ranges, filter names) — it
+never keeps a copy of the rendered values, so it is safe to use with sensitive assigns.

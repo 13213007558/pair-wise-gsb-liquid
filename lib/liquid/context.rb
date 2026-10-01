@@ -64,6 +64,13 @@ module Liquid
       @warnings ||= []
     end
 
+    # The active Liquid::Provenance::Tracker, if provenance tracking was
+    # enabled for this render (see Template#render_with_provenance).
+    # nil during normal renders.
+    def provenance
+      @registers.static[:provenance]
+    end
+
     def strainer
       @strainer ||= @environment.create_strainer(self, @filters)
     end
