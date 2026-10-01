@@ -19,6 +19,9 @@ module Liquid
     MarkupWithQuotedFragment = /(#{QuotedFragment})(.*)/om
 
     attr_accessor :filters, :name, :line_number
+    # The HTML context this variable was parsed in, when the template was
+    # parsed with HTML-safe mode enabled. Set by HTMLSafe.annotate_variable.
+    attr_accessor :html_context
     attr_reader :parse_context
     alias_method :options, :parse_context
 
@@ -109,8 +112,11 @@ module Liquid
     end
 
     def render_to_output_buffer(context, output)
-      obj = render(context)
-      render_obj_to_output(obj, output)
+      if (html_tracker = HTMLSafe.tracker(context))
+        HTMLSafe.write_value(html_tracker, output, render(context))
+      else
+        render_obj_to_output(render(context), output)
+      end
       output
     end
 

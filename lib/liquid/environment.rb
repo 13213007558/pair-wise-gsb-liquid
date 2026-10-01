@@ -26,6 +26,11 @@ module Liquid
     # template can consume.
     attr_accessor :default_resource_limits
 
+    # Whether templates escape interpolated values based on the HTML context
+    # they appear in. Defaults to false, which renders values as plain text.
+    # Can be overridden per template with the +html_safe+ parse option.
+    attr_accessor :html_safe
+
     class << self
       # Creates a new environment instance.
       #
@@ -82,6 +87,7 @@ module Liquid
       @exception_renderer = ->(exception) { exception }
       @file_system = BlankFileSystem.new
       @default_resource_limits = Const::EMPTY_HASH
+      @html_safe = false
       @strainer_template_class_cache = {}
     end
 

@@ -24,6 +24,7 @@ module Liquid
     def initialize(tag_name, markup, parse_context)
       super
       @variable = Variable.new(markup, parse_context)
+      HTMLSafe.annotate_variable(@variable, parse_context) if parse_context.html_safe?
     end
 
     def render(context)

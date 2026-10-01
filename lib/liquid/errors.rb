@@ -56,4 +56,5 @@ module Liquid
   DisabledError         = Class.new(Error)
   InternalError         = Class.new(Error)
   TemplateEncodingError = Class.new(Error)
+  HTMLSafeError         = Class.new(Error)
 end

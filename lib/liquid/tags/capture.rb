@@ -51,7 +51,21 @@ module Liquid
 
     def render_to_output_buffer(context, output)
       context.resource_limits.with_capture do
-        capture_output = render(context)
+        # A captured fragment is rendered in a fresh text context: its
+        # eventual insertion point is unknown, and the capture must not
+        # disturb the HTML context of the surrounding output.
+        html_tracker = HTMLSafe.tracker(context)
+        html_snapshot = nil
+        if html_tracker
+          html_snapshot = html_tracker.snapshot
+          html_tracker.reset
+        end
+        begin
+          capture_output = render(context)
+        ensure
+          html_tracker&.restore(html_snapshot)
+        end
+        capture_output = HTMLSafe::SafeString.new(capture_output) if html_tracker
         context.scopes.last[@to] = capture_output
       end
       output

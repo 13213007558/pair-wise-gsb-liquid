@@ -27,6 +27,7 @@ module Liquid
         if token =~ BlockBody::FullTokenPossiblyInvalid && block_delimiter == Regexp.last_match(2)
           parse_context.trim_whitespace = (token[-3] == WhitespaceControl)
           @body << Regexp.last_match(1) if Regexp.last_match(1) != ""
+          parse_context.html_tracker.track(@body) if parse_context.html_safe?
           return
         end
         @body << token unless token.empty?
@@ -35,7 +36,8 @@ module Liquid
       raise_tag_never_closed(block_name)
     end
 
-    def render_to_output_buffer(_context, output)
+    def render_to_output_buffer(context, output)
+      HTMLSafe.tracker(context)&.track(@body)
       output << @body
       output
     end

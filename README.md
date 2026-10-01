@@ -118,6 +118,42 @@ This is useful for doing things like enabling strict mode only in the theme edit
 It is recommended that you enable `:strict` or `:warn` mode on new apps to stop invalid templates from being created.
 It is also recommended that you use it in the template editors of existing apps to give editors better error messages.
 
+### HTML-safe rendering
+
+By default Liquid renders interpolated values as plain text; escaping them for
+HTML is left to the template author (e.g. via the `escape` filter). You can
+opt into HTML-safe rendering, where Liquid tracks the HTML context a template
+is rendered into and escapes every interpolation (`{{ ... }}`, `{% echo %}`,
+`{% cycle %}`) accordingly:
+
+```ruby
+environment = Liquid::Environment.build { |env| env.html_safe = true }
+Liquid::Template.parse(source, environment: environment)
+# or per template:
+Liquid::Template.parse(source, html_safe: true)
+```
+
+The supported HTML subset is: text content, start/end/self-closing tags,
+double-quoted, single-quoted, unquoted and valueless attributes, HTML
+comments, and the raw text elements `<script>` and `<style>`.
+
+* In text content, values are HTML-escaped (`&`, `<`, `>`).
+* In attribute values, values are escaped for that attribute form (quotes,
+  `&`, `<`, `>`, plus whitespace, backtick and `=` for unquoted values).
+* In URL attributes (`href`, `src`, `action`, `formaction`, `poster`,
+  `background`, `cite`, `data`, `xlink:href`), the URL scheme is checked
+  against an allowlist (`http`, `https`, `mailto`, `tel`, relative URLs and
+  fragments); anything else raises `Liquid::HTMLSafeError`.
+* Interpolations inside event handler attributes (`on*`), `<script>` or
+  `<style>` content, HTML comments, or any position Liquid cannot classify
+  raise `Liquid::HTMLSafeError` instead of being emitted.
+
+Context tracking crosses `{% if %}` branches and `{% render %}` partial
+boundaries at render time. `{% capture %}` renders its body in a fresh text
+context and marks the result as safe HTML, so captured fragments are not
+escaped again in text content (they are still escaped inside attribute
+values). Templates rendered without this option behave exactly as before.
+
 ### Undefined variables and filters
 
 By default, the renderer doesn't raise or in any other way notify you if some variables or filters are missing, i.e. not passed to the `render` method.

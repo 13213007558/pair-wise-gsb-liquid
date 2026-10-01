@@ -192,6 +192,15 @@ module Liquid
       previous_error_mode = context.registers.static[:template_error_mode]
       context.registers.static[:template_error_mode] = @error_mode
 
+      # When HTML-safe mode is already active, an outer render owns the
+      # tracker (e.g. a {% render %}ed partial shares it, so the HTML context
+      # is tracked across the partial boundary).
+      previous_html_safe = context.registers.static[:html_safe]
+      if @html_safe && !previous_html_safe
+        context.registers.static[:html_safe] = true
+        context.registers.static[:html_context_tracker] = Liquid::HTMLSafe::Tracker.new
+      end
+
       begin
         # render the nodelist.
         @root.render_to_output_buffer(context, output || +'')
@@ -202,6 +211,10 @@ module Liquid
           context.registers.static[:template_error_mode] = previous_error_mode
         else
           context.registers.static.delete(:template_error_mode)
+        end
+        unless previous_html_safe
+          context.registers.static.delete(:html_safe)
+          context.registers.static.delete(:html_context_tracker)
         end
         @errors = context.errors
       end
@@ -235,6 +248,7 @@ module Liquid
 
       @warnings = parse_context.warnings
       @error_mode = parse_context.error_mode
+      @html_safe = parse_context.html_safe?
       parse_context
     end
 

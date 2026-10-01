@@ -44,7 +44,11 @@ module Liquid
         val = val.to_s
       end
 
-      output << val
+      if (html_tracker = HTMLSafe.tracker(context))
+        HTMLSafe.write_value(html_tracker, output, val)
+      else
+        output << val
+      end
 
       iteration += 1
       iteration = 0 if iteration >= @variables.size

@@ -93,7 +93,7 @@ module Liquid
     # @api private
     def self.rescue_render_node(context, output, line_number, exc, blank_tag)
       case exc
-      when MemoryError
+      when MemoryError, HTMLSafeError
         raise
       when UndefinedVariable, UndefinedDropMethod, UndefinedFilter
         context.handle_error(exc, line_number)
@@ -166,6 +166,7 @@ module Liquid
             token.lstrip!
           end
           parse_context.trim_whitespace = false
+          parse_context.html_tracker.track(token) if parse_context.html_safe?
           @nodelist << token
           @blank &&= token.match?(WhitespaceOrNothing)
         end
@@ -222,9 +223,12 @@ module Liquid
 
       context.resource_limits.increment_render_score(@nodelist.length)
 
+      html_tracker = HTMLSafe.tracker(context)
+
       idx = 0
       while (node = @nodelist[idx])
         if node.instance_of?(String)
+          html_tracker&.track(node)
           output << node
         else
           render_node(context, output, node)
@@ -256,7 +260,9 @@ module Liquid
         markup_end = parse_end - i + 1
         markup = markup_end <= 0 ? "" : token.slice(i, markup_end)
 
-        return Variable.new(markup, parse_context)
+        variable = Variable.new(markup, parse_context)
+        HTMLSafe.annotate_variable(variable, parse_context) if parse_context.html_safe?
+        return variable
       end
 
       BlockBody.raise_missing_variable_terminator(token, parse_context)

@@ -74,6 +74,19 @@ module Liquid
       @options = value ? partial_options : @template_options
 
       @error_mode = @options[:error_mode] || @environment.error_mode
+      @html_safe = @options.key?(:html_safe) ? @options[:html_safe] : @environment.html_safe
+      @html_tracker = nil
+    end
+
+    def html_safe?
+      !!@html_safe
+    end
+
+    # Parse-time HTML context tracker, shared by the block bodies of the
+    # template currently being parsed. Reset when a partial starts parsing,
+    # because a partial's enclosing HTML context is unknown.
+    def html_tracker
+      @html_tracker ||= HTMLSafe::Tracker.new
     end
 
     def partial_options

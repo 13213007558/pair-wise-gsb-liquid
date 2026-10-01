@@ -77,6 +77,10 @@ module Liquid
         raise StackLevelError, "Nesting too deep"
       end
       parse_context.depth += 1
+      # Each branch of a control flow tag starts from the HTML context the
+      # tag itself is in; whatever context a branch ends in does not leak
+      # into the markup that follows the tag.
+      html_snapshot = parse_context.html_tracker.snapshot if parse_context.html_safe?
       begin
         body.parse(tokens, parse_context) do |end_tag_name, end_tag_params|
           @blank &&= body.blank?
@@ -89,6 +93,7 @@ module Liquid
           unknown_tag(end_tag_name, end_tag_params, tokens)
         end
       ensure
+        parse_context.html_tracker.restore(html_snapshot) if html_snapshot
         parse_context.depth -= 1
       end
 
