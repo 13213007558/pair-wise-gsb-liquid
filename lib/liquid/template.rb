@@ -141,6 +141,8 @@ module Liquid
     def render(*args)
       return '' if @root.nil?
 
+      known = @specialized_known_assigns
+
       context = case args.first
       when Liquid::Context
         c = args.shift
@@ -161,6 +163,22 @@ module Liquid
         Context.new(assigns, instance_assigns, registers, @rethrow_errors, @resource_limits, {}, @environment)
       else
         raise ArgumentError, "Expected Hash or Liquid::Context as parameter"
+      end
+
+      # Bake the known data into the (writable) environment chain used for
+      # the render. Known keys sit behind the per-render dynamic assigns
+      # (which take precedence) but ahead of any other environments; this is
+      # also where increment/decrement read and write. The baked layer is
+      # copied per render so mutations do not leak across renders.
+      if known
+        dynamic = context.environments.first || {}
+        baked = known.transform_values { |v| deep_dup_specialized_value(v) }
+        merged = dynamic.merge(baked)
+        if context.environments.empty?
+          context.environments << merged
+        else
+          context.environments[0] = merged
+        end
       end
 
       output = nil
@@ -216,7 +234,70 @@ module Liquid
       render(context, output: output)
     end
 
+    # Specializes the parsed template for a set of known, plain data
+    # assigns (e.g. tenant name and configuration that stay constant while
+    # the template is rendered for thousands of records) and returns a new
+    # Template that renders the remaining variables.
+    #
+    # Known output and decidable conditions are folded away; undecidable
+    # conditions, loops and variable shadowing keep their original
+    # semantics.
+    #
+    # Specialization is safe:
+    #
+    # * Drops are never invoked and only filters whose names are explicitly
+    #   listed in <tt>pure_filters</tt> are called during specialization.
+    # * Branches that the original render would not execute are never
+    #   evaluated, so errors hidden inside them are not triggered early.
+    # * For any dynamic input, the specialized template produces the same
+    #   result, error locations and side-effect counts as the original.
+    # * Observable resource limits cannot be bypassed by folding.
+    #
+    # @param known_assigns [Hash] plain Ruby data (Hashes, Arrays, Strings,
+    #   Numerics, booleans, nil) known up-front. Drops and Procs are ignored.
+    # @param pure_filters [Array<String,Symbol>] names of filters that are
+    #   guaranteed to be pure; these are the only filters evaluated during
+    #   specialization.
+    # @param filters [Array<Module>] filter modules available when rendering
+    #   (defaults to none, like Template#render).
+    # @param global_filter [Proc, nil] global filter applied at render time.
+    # @return [Liquid::Template] the specialized template
+    def specialize(known_assigns = {}, pure_filters: [], filters: nil, global_filter: nil)
+      raise "Cannot specialize an unparsed template" if @root.nil?
+
+      require 'liquid/specialized'
+
+      specializer = Liquid::Specialized::Specializer.new(
+        environment: @environment,
+        known_assigns: known_assigns,
+        filters: filters,
+        pure_filter_names: pure_filters,
+        global_filter: global_filter,
+      )
+      body = specializer.specialize(@root)
+      root = Liquid::Specialized::Document.new(@root.parse_context, body)
+
+      self.class.new(environment: @environment).tap do |template|
+        template.root = root
+        template.name = name
+        template.instance_variable_set(:@specialized_known_assigns, specializer.initial_bindings)
+      end
+    end
+
     private
+
+    def deep_dup_specialized_value(value)
+      case value
+      when Array
+        value.map { |v| deep_dup_specialized_value(v) }
+      when Hash
+        value.each_with_object({}) { |(k, v), h| h[k] = deep_dup_specialized_value(v) }
+      when String
+        +value.dup
+      else
+        value
+      end
+    end
 
     def configure_options(options)
       if (profiling = options[:profile])
