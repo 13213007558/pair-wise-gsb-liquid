@@ -3,7 +3,7 @@
 module Liquid
   class ParseContext
     attr_accessor :locale, :line_number, :trim_whitespace, :depth
-    attr_reader :partial, :warnings, :error_mode, :environment
+    attr_reader :partial, :warnings, :error_mode, :environment, :template_options
 
     def initialize(options = Const::EMPTY_HASH)
       @environment = options.fetch(:environment, Environment.default)
@@ -24,7 +24,8 @@ module Liquid
         {}
       end
 
-      self.depth   = 0
+      @error_mode   = options[:error_mode] || @environment.error_mode
+      self.depth    = 0
       self.partial = false
     end
 

@@ -10,9 +10,9 @@ module Liquid
 
     attr_reader :parse_context, :body
 
-    def initialize(parse_context)
+    def initialize(parse_context, body: nil)
       @parse_context = parse_context
-      @body = new_body
+      @body = body || new_body
     end
 
     def nodelist

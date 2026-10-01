@@ -33,6 +33,16 @@ module Liquid
       strict_parse_with_error_mode_fallback(markup)
     end
 
+    def self.compiled(name, filters = Const::EMPTY_ARRAY, markup: nil, line_number: nil)
+      instance = allocate
+      instance.instance_variable_set(:@name, name)
+      instance.instance_variable_set(:@filters, filters)
+      instance.instance_variable_set(:@markup, markup)
+      instance.instance_variable_set(:@line_number, line_number)
+      instance.instance_variable_set(:@parse_context, nil)
+      instance
+    end
+
     def raw
       @markup
     end

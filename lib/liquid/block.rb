@@ -9,6 +9,27 @@ module Liquid
       @blank = true
     end
 
+    def self.compiled(tag_name, markup, parse_context, line_number: nil, body: nil, blank: true)
+      instance = super(tag_name, markup, parse_context, line_number: line_number)
+      instance.instance_variable_set(:@blank, blank)
+      instance.instance_variable_set(:@body, body) if body
+      instance
+    end
+
+    def self.from_compiled_tag(data, parse_context)
+      instance = send(:new, data.fetch('tag_name'), data.fetch('markup').to_s, parse_context)
+      instance.instance_variable_set(:@line_number, data['line_number'])
+      instance.compiled_tag_data = data if instance.respond_to?(:compiled_tag_data=)
+      if data.key?('raw_body')
+        instance.instance_variable_set(:@body, data.fetch('raw_body').to_s)
+      elsif block_given?
+        body = yield(data['body'])
+        instance.instance_variable_set(:@body, body)
+        instance.instance_variable_set(:@blank, body.send(:blank?))
+      end
+      instance
+    end
+
     def parse(tokens)
       @body = new_body
       while parse_body(@body, tokens)

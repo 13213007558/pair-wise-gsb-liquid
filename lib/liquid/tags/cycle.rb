@@ -20,6 +20,7 @@ module Liquid
     UNNAMED_CYCLE_PATTERN = /\w+:0x\h{8}/
 
     attr_reader :variables
+    attr_writer :compiled_counter_key
 
     def initialize(tag_name, markup, options)
       super
@@ -33,7 +34,7 @@ module Liquid
     def render_to_output_buffer(context, output)
       context.registers[:cycle] ||= {}
 
-      key       = context.evaluate(@name)
+      key       = @compiled_counter_key || context.evaluate(@name)
       iteration = context.registers[:cycle][key].to_i
 
       val = context.evaluate(@variables[iteration])

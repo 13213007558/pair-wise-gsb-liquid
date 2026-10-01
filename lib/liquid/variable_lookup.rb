@@ -40,6 +40,14 @@ module Liquid
       end
     end
 
+    def self.compiled(name, lookups = Const::EMPTY_ARRAY, command_flags = 0)
+      instance = allocate
+      instance.instance_variable_set(:@name, name)
+      instance.instance_variable_set(:@lookups, lookups)
+      instance.instance_variable_set(:@command_flags, command_flags)
+      instance
+    end
+
     def lookup_command?(lookup_index)
       @command_flags & (1 << lookup_index) != 0
     end

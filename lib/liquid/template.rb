@@ -85,6 +85,14 @@ module Liquid
         environment = options[:environment] || Environment.default
         new(environment: environment).parse(source, options)
       end
+
+      def load_compiled(payload, environment: Environment.default, limits: nil, validate_filters: true)
+        CompiledTemplate::Decoder.new(
+          environment: environment,
+          limits: limits,
+          validate_filters: validate_filters,
+        ).load(payload)
+      end
     end
 
     def initialize(environment: Environment.default)
@@ -106,6 +114,18 @@ module Liquid
       tokenizer     = parse_context.new_tokenizer(source, start_line_number: @line_numbers && 1)
       @root         = Document.parse(tokenizer, parse_context)
       self
+    end
+
+    def export_compiled(partials: nil, file_system: :environment, include_dependencies: false)
+      raise InternalError, "cannot export a template before parsing it" unless @root
+
+      artifact = CompiledTemplate::Encoder.new(
+        self,
+        file_system: file_system == :environment ? nil : file_system,
+        partials: partials,
+        include_dependencies: include_dependencies,
+      ).export
+      JSON.generate(artifact)
     end
 
     def registers
@@ -194,6 +214,13 @@ module Liquid
 
       begin
         # render the nodelist.
+        if @compiled_partials && !@compiled_partials.empty?
+          begin
+            context.registers.static[:compiled_partials] = @compiled_partials
+          rescue FrozenError
+            context.registers[:compiled_partials] = @compiled_partials
+          end
+        end
         @root.render_to_output_buffer(context, output || +'')
       rescue Liquid::MemoryError => e
         context.handle_error(e)

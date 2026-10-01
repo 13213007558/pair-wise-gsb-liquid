@@ -14,9 +14,14 @@ module Liquid
 
     attr_reader :nodelist
 
-    def initialize
+    def initialize(nodelist = nil, blank = true)
       @nodelist = []
-      @blank    = true
+      @blank    = blank
+      @nodelist = nodelist if nodelist
+    end
+
+    def self.compiled(nodelist, blank = true)
+      new(nodelist, blank).freeze
     end
 
     def parse(tokenizer, parse_context, &block)
@@ -58,6 +63,7 @@ module Liquid
             return yield tag_name, markup
           end
           new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
+          new_tag.instance_variable_set(:@tag_name, tag_name) unless new_tag.instance_variable_defined?(:@tag_name)
           @blank &&= new_tag.blank?
           @nodelist << new_tag
         end
@@ -155,6 +161,7 @@ module Liquid
             return yield tag_name, markup
           end
           new_tag = tag.parse(tag_name, markup, tokenizer, parse_context)
+          new_tag.instance_variable_set(:@tag_name, tag_name) unless new_tag.instance_variable_defined?(:@tag_name)
           @blank &&= new_tag.blank?
           @nodelist << new_tag
         when token.start_with?(VARSTART)

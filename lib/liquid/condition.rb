@@ -48,6 +48,10 @@ module Liquid
       @@operators
     end
 
+    def self.method_literal(name)
+      @@method_literals.fetch(name)
+    end
+
     def self.parse_expression(parse_context, markup, safe: false)
       @@method_literals[markup] || parse_context.parse_expression(markup, safe: safe)
     end
@@ -62,6 +66,13 @@ module Liquid
 
       @child_relation  = nil
       @child_condition = nil
+    end
+
+    def self.compiled(left, operator, right, child_relation: nil, child_condition: nil)
+      instance = new(left, operator, right)
+      instance.instance_variable_set(:@child_relation, child_relation)
+      instance.instance_variable_set(:@child_condition, child_condition)
+      instance
     end
 
     def evaluate(context = deprecated_default_context)
