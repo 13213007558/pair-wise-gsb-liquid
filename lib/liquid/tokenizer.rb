@@ -48,6 +48,12 @@ module Liquid
       token
     end
 
+    # Returns a future token without consuming it. With no offset this returns
+    # the token that #shift would return next.
+    def peek(offset = 0)
+      @tokens[@offset + offset]
+    end
+
     private
 
     def tokenize

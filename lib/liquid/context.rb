@@ -14,8 +14,10 @@ module Liquid
   #
   #   context['bob']  #=> nil  class Context
   class Context
-    attr_reader :scopes, :errors, :registers, :environments, :resource_limits, :static_registers, :static_environments
-    attr_accessor :exception_renderer, :template_name, :partial, :global_filter, :strict_variables, :strict_filters, :environment
+    attr_reader :scopes, :errors, :registers, :environments, :resource_limits, :static_registers,
+      :static_environments, :disabled_tags
+    attr_accessor :exception_renderer, :template_name, :partial, :global_filter, :strict_variables,
+      :strict_filters, :environment, :slots
 
     # rubocop:disable Metrics/ParameterLists
     def self.build(environment: Environment.default, environments: {}, outer_scope: {}, registers: {}, rethrow_errors: false, resource_limits: nil, static_environments: {}, &block)
@@ -159,6 +161,7 @@ module Liquid
         subcontext.errors   = errors
         subcontext.warnings = warnings
         subcontext.disabled_tags = @disabled_tags
+        subcontext.slots    = @slots
       end
     end
 

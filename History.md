@@ -1,5 +1,9 @@
 # Liquid Change Log
 
+## Unreleased
+
+* Add named content slots to the `render` tag: a render block can supply named `{% slot %}` blocks to a snippet, which can render them at chosen positions with default fallback content. Slot content is evaluated lazily in the caller's variable environment, per invocation, without leaking variables, and transparently forwards through nested renders
+
 ## 5.14.0
 
 * Avoid materializing integer ranges in `for` and `tablerow` loops, and account for each visited range item [Ian Ker-Seymer]
