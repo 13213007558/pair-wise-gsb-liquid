@@ -1,5 +1,9 @@
 # Liquid Change Log
 
+## Unreleased
+
+* Add a `stream` tag that iterates any enumerable lazily (one item at a time, no buffering, sizing, or rewinding), for large or one-shot collections such as database cursors. `forloop.length`, `rindex`, and `rindex0` return `nil` in this mode, `forloop.last` is detected with a single-item lookahead, and `reversed` is rejected
+
 ## 5.14.0
 
 * Avoid materializing integer ranges in `for` and `tablerow` loops, and account for each visited range item [Ian Ker-Seymer]

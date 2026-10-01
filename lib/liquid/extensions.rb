@@ -39,6 +39,12 @@ class Range # :nodoc:
   end
 end
 
+class Enumerator # :nodoc:
+  def to_liquid
+    self
+  end
+end
+
 class Time # :nodoc:
   def to_liquid
     self
