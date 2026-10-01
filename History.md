@@ -1,5 +1,11 @@
 # Liquid Change Log
 
+## Unreleased
+
+* Add `Template#specialize` for partially evaluating a template against known,
+  plain data with an explicit allow-list of pure filters, returning a new
+  template that keeps the remaining variables dynamic
+
 ## 5.14.0
 
 * Avoid materializing integer ranges in `for` and `tablerow` loops, and account for each visited range item [Ian Ker-Seymer]

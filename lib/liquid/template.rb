@@ -212,6 +212,83 @@ module Liquid
       render(*args)
     end
 
+    # Partially evaluates this parsed template against +known_data+ that is
+    # identical for every subsequent rendering, and returns a new Template that
+    # still accepts the remaining, dynamic variables.
+    #
+    #   template    = Liquid::Template.parse(source)
+    #   specialized = template.specialize(
+    #     { 'tenant' => 'Acme', 'config' => config },
+    #     pure_filters: [:upcase, MyPureFilters],
+    #   )
+    #   specialized.render('order' => order)
+    #
+    # Fixed text, fixed variables and conditions that are decidable from
+    # +known_data+ are folded. Conditions that depend on unknown variables,
+    # loops and variable shadowing are preserved with their original
+    # semantics.
+    #
+    # +known_data+ must contain only plain values (nil, booleans, numbers,
+    # strings, symbols and arrays/hashes thereof). Liquid::Drop values and
+    # Procs are rejected.
+    #
+    # +pure_filters+ is the explicit list of filters that are guaranteed to be
+    # pure (deterministic and side-effect free). Each entry is either a filter
+    # name (String or Symbol) or a Module whose public instance methods are all
+    # treated as pure. Only these filters are ever invoked during
+    # specialization; every other filter is deferred to render time. Filters
+    # supplied as Modules are also made available to the resulting template
+    # unless they are already registered on the environment.
+    #
+    # Options:
+    # * <tt>:filters</tt> : array of filter Modules that the declared pure
+    #   filter names may refer to (also available at render time)
+    #
+    # The returned template is semantically equivalent to the original for any
+    # dynamic input: output, error locations, filter side-effect counts and
+    # resource limit consumption match.
+    def specialize(known_data = nil, **options)
+      # Ruby turns a trailing String-keyed hash literal into keyword arguments
+      # for a method that also accepts keywords (option keys are Symbols).
+      # Recover such data and keep only the Symbol option keys.
+      if known_data.nil? && options.keys.any? { |key| key.is_a?(String) }
+        known_data = options.select { |key, _value| key.is_a?(String) }
+        options.select! { |key, _value| key.is_a?(Symbol) }
+      end
+
+      known_data = {} if known_data.nil?
+      unless known_data.is_a?(Hash)
+        raise ArgumentError, "specialize expects a Hash of known data, got #{known_data.class}"
+      end
+
+      pure_filters = options.fetch(:pure_filters, [])
+      filters = options.fetch(:filters, [])
+
+      extra_modules = []
+
+      pure_filter_names = Array(pure_filters).each_with_object(Set.new) do |entry, names|
+        case entry
+        when Symbol, String
+          names << entry.to_s
+        when Module
+          entry.public_instance_methods.each { |name| names << name.to_s }
+          extra_modules << entry
+        else
+          raise ArgumentError,
+            "pure_filters entries must be filter names or modules: #{entry.inspect}"
+        end
+      end
+
+      Array(filters).each do |mod|
+        raise ArgumentError, "filters entries must be modules: #{mod.inspect}" unless mod.is_a?(Module)
+        extra_modules << mod
+      end
+
+      Specializer.new(self, known_data,
+        pure_filter_names: pure_filter_names,
+        extra_filter_modules: extra_modules.uniq).specialize
+    end
+
     def render_to_output_buffer(context, output)
       render(context, output: output)
     end

@@ -52,6 +52,38 @@ For standard use you can just pass it the content of a file and call render with
 @template.render('name' => 'tobi')                # => "hi tobi"
 ```
 
+### Specializing a template
+
+When the same template is rendered many times against data that is partly
+identical on every render (a tenant name, a fixed configuration), you can
+partially evaluate the template once with `Template#specialize`. It returns a
+new template with the fixed text, variables and decidable conditions folded
+away, while the remaining variables (e.g. an order) stay dynamic:
+
+```ruby
+invoice_template = Liquid::Template.parse(<<~LIQUID)
+  Invoice for {{ tenant.name }}
+  {% if config.tax_included %}Tax included{% endif %}
+  {% for line in order.lines %}{{ line.sku }}: {{ line.total }}{% endfor %}
+  Total: {{ order.total }}
+LIQUID
+
+specialized = invoice_template.specialize(
+  { 'tenant' => { 'name' => 'Acme' }, 'config' => { 'tax_included' => true } },
+  pure_filters: [:upcase], # filters guaranteed to be pure (see below)
+)
+
+orders.each { |order| specialized.render('order' => order) }
+```
+
+Only plain data is accepted (`nil`, booleans, numbers, strings, symbols and
+arrays/hashes of those); `Liquid::Drop` values and procs are never touched.
+Filters listed in `pure_filters:` (names or modules) are the only filters
+allowed to run during specialization. Everything else, including loops and
+conditions that depend on unknown variables, is preserved for render time.
+The specialized template is semantically equivalent to the original for every
+dynamic input, including error locations and resource-limit behaviour.
+
 ### Concept of Environments
 
 In Liquid, a "Environment" is a scoped environment that encapsulates custom tags, filters, and other configurations. This allows you to define and isolate different sets of functionality for different contexts, avoiding global overrides that can lead to conflicts and unexpected behavior.

@@ -220,7 +220,17 @@ module Liquid
     def render_to_output_buffer(context, output)
       freeze unless frozen?
 
-      context.resource_limits.increment_render_score(@nodelist.length)
+      if @explicit_slot_charges
+        # Bodies built by Template#specialize contain nodes that charge their
+        # own render score explicitly (see Specializer).
+        charge = 0
+        @nodelist.each do |node|
+          charge += 1 unless node.respond_to?(:skip_slot_charge?) && node.skip_slot_charge?
+        end
+        context.resource_limits.increment_render_score(charge) if charge > 0
+      else
+        context.resource_limits.increment_render_score(@nodelist.length)
+      end
 
       idx = 0
       while (node = @nodelist[idx])
