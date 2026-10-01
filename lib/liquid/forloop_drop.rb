@@ -86,4 +86,34 @@ module Liquid
       @index += 1
     end
   end
+
+  # A ForloopDrop used by streaming `for` loops (`{% for item in collection stream %}`),
+  # where the collection is consumed lazily and its total length is unknown.
+  #
+  # `index`, `index0`, and `first` behave as usual, and `last` is answered through
+  # a one-item lookahead. Attributes that require the total length of the
+  # collection (`length`, `rindex`, and `rindex0`) return `nil` to signal that
+  # the value is unavailable.
+  class StreamingForloopDrop < ForloopDrop
+    def initialize(name, parentloop)
+      super(name, nil, parentloop)
+      @last = false
+    end
+
+    def rindex
+      nil
+    end
+
+    def rindex0
+      nil
+    end
+
+    def last
+      @last
+    end
+
+    protected
+
+    attr_writer :last
+  end
 end
