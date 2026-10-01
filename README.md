@@ -52,6 +52,32 @@ For standard use you can just pass it the content of a file and call render with
 @template.render('name' => 'tobi')                # => "hi tobi"
 ```
 
+### Exporting compiled templates
+
+Parsed templates can be exported to a versioned JSON payload and loaded in another Ruby
+process without using `Marshal` or `eval`:
+
+```ruby
+payload = Liquid::Template.parse("hi {{ name | upcase }}").export_compiled
+template = Liquid::Template.load_compiled(payload)
+template.render('name' => 'tobi') # => "hi TOBI"
+```
+
+The payload stores an explicit AST and static `render`/`include` dependencies. Filters and custom tags
+are bound by their registered names, so the loading environment must register the same filters and tags:
+
+```ruby
+environment.register_filter(ProductFilters)
+environment.register_tag('product_card', ProductCardTag)
+
+payload = template.export_compiled
+Liquid::Template.load_compiled(payload, environment: environment)
+```
+
+Loading validates the format/version, node types, template references, payload depth, node count, string
+size, and number of bundled partials. Missing filters, tags, or dependencies raise errors carrying the
+name of the template that referenced them.
+
 ### Concept of Environments
 
 In Liquid, a "Environment" is a scoped environment that encapsulates custom tags, filters, and other configurations. This allows you to define and isolate different sets of functionality for different contexts, avoiding global overrides that can lead to conflicts and unexpected behavior.

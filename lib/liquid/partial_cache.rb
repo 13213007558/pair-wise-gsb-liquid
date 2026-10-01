@@ -8,6 +8,10 @@ module Liquid
       cached = cached_partials[cache_key]
       return cached if cached
 
+      compiled_partials = context.registers[:compiled_partials]
+      compiled = compiled_partials && compiled_partials[template_name]
+      return compiled if compiled
+
       file_system = context.registers[:file_system]
       source      = file_system.read_template_file(template_name)
 

@@ -55,5 +55,6 @@ module Liquid
   MethodOverrideError   = Class.new(Error)
   DisabledError         = Class.new(Error)
   InternalError         = Class.new(Error)
+  CompiledTemplateError = Class.new(Error)
   TemplateEncodingError = Class.new(Error)
 end

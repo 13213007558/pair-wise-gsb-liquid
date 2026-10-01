@@ -16,7 +16,7 @@ module Liquid
   #
   class Template
     attr_accessor :root, :name
-    attr_reader :resource_limits, :warnings
+    attr_reader :resource_limits, :warnings, :environment
 
     attr_reader :profiler
 
@@ -84,6 +84,10 @@ module Liquid
       def parse(source, options = {})
         environment = options[:environment] || Environment.default
         new(environment: environment).parse(source, options)
+      end
+
+      def load_compiled(payload, **options)
+        CompiledTemplate.load(payload, **options)
       end
     end
 
@@ -191,6 +195,7 @@ module Liquid
 
       previous_error_mode = context.registers.static[:template_error_mode]
       context.registers.static[:template_error_mode] = @error_mode
+      context.registers.static[:compiled_partials] ||= @compiled_partials if @compiled_partials
 
       begin
         # render the nodelist.
@@ -214,6 +219,14 @@ module Liquid
 
     def render_to_output_buffer(context, output)
       render(context, output: output)
+    end
+
+    def export_compiled(**options)
+      CompiledTemplate.dump(self, **options)
+    end
+
+    def to_compiled_template(**options)
+      CompiledTemplate.export(self, **options)
     end
 
     private
