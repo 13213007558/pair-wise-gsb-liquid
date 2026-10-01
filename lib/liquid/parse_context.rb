@@ -3,7 +3,7 @@
 module Liquid
   class ParseContext
     attr_accessor :locale, :line_number, :trim_whitespace, :depth
-    attr_reader :partial, :warnings, :error_mode, :environment
+    attr_reader :partial, :warnings, :error_mode, :environment, :html_safe
 
     def initialize(options = Const::EMPTY_HASH)
       @environment = options.fetch(:environment, Environment.default)
@@ -11,6 +11,7 @@ module Liquid
 
       @locale   = @template_options[:locale] ||= I18n.new
       @warnings = []
+      @html_safe = options.fetch(:html_safe, @environment.respond_to?(:html_safe) ? @environment.html_safe : false)
 
       # constructing new StringScanner in Lexer, Tokenizer, etc is expensive
       # This StringScanner will be shared by all of them
@@ -87,6 +88,10 @@ module Liquid
           @template_options
         end
       end
+    end
+
+    def html_safe?
+      @html_safe
     end
   end
 end

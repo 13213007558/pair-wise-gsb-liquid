@@ -15,7 +15,8 @@ module Liquid
   #   context['bob']  #=> nil  class Context
   class Context
     attr_reader :scopes, :errors, :registers, :environments, :resource_limits, :static_registers, :static_environments
-    attr_accessor :exception_renderer, :template_name, :partial, :global_filter, :strict_variables, :strict_filters, :environment
+    attr_accessor :exception_renderer, :template_name, :partial, :global_filter,
+      :strict_variables, :strict_filters, :environment, :html_safety
 
     # rubocop:disable Metrics/ParameterLists
     def self.build(environment: Environment.default, environments: {}, outer_scope: {}, registers: {}, rethrow_errors: false, resource_limits: nil, static_environments: {}, &block)
@@ -39,6 +40,7 @@ module Liquid
       @filters             = []
       @global_filter       = nil
       @disabled_tags       = {}
+      @html_safety         = nil
 
       # Instead of constructing new StringScanner objects for each Expression parse,
       # we recycle the same one.
@@ -159,6 +161,31 @@ module Liquid
         subcontext.errors   = errors
         subcontext.warnings = warnings
         subcontext.disabled_tags = @disabled_tags
+        subcontext.html_safety = html_safety
+      end
+    end
+
+    def html_safe?
+      !html_safety.nil?
+    end
+
+    def append_static_html(output, literal)
+      if html_safety
+        html_safety.append_static(output, literal)
+      else
+        output << literal
+      end
+    end
+
+    def append_html_interpolation(output, value, html_escaped: false)
+      if html_safety
+        html_safety.append_interpolation(output, value, html_escaped: html_escaped)
+      elsif value.nil?
+        output
+      elsif value.is_a?(Array)
+        value.each { |item| append_html_interpolation(output, item, html_escaped: html_escaped) }
+      else
+        output << Utils.to_s(value)
       end
     end
 

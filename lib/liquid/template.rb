@@ -164,10 +164,11 @@ module Liquid
       end
 
       output = nil
+      render_options = {}
 
       case args.last
       when Hash
-        options = args.pop
+        render_options = options = args.pop
         output  = options[:output] if options[:output]
         static_registers = context.registers.static
 
@@ -188,6 +189,10 @@ module Liquid
       end
 
       context.template_name ||= name
+
+      if context.html_safety.nil? && (@html_safe || render_options[:html_safe])
+        context.html_safety = HtmlSafety.new
+      end
 
       previous_error_mode = context.registers.static[:template_error_mode]
       context.registers.static[:template_error_mode] = @error_mode
@@ -235,6 +240,7 @@ module Liquid
 
       @warnings = parse_context.warnings
       @error_mode = parse_context.error_mode
+      @html_safe = parse_context.html_safe?
       parse_context
     end
 

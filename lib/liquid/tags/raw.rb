@@ -36,7 +36,7 @@ module Liquid
     end
 
     def render_to_output_buffer(_context, output)
-      output << @body
+      _context.append_static_html(output, @body)
       output
     end
 

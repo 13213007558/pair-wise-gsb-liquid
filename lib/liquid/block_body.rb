@@ -96,13 +96,13 @@ module Liquid
       when MemoryError
         raise
       when UndefinedVariable, UndefinedDropMethod, UndefinedFilter
-        context.handle_error(exc, line_number)
+        error_message = context.handle_error(exc, line_number)
       else
         error_message = context.handle_error(exc, line_number)
         error_mode = context.registers.static[:template_error_mode]
         suppress_error_text = blank_tag && error_mode != :strict2 && error_mode != :rigid
         unless suppress_error_text # blank-tag suppression is kept for backwards compatibility outside strict2
-          output << error_message
+          context.append_html_interpolation(output, error_message)
         end
       end
     end
@@ -225,7 +225,7 @@ module Liquid
       idx = 0
       while (node = @nodelist[idx])
         if node.instance_of?(String)
-          output << node
+          context.append_static_html(output, node)
         else
           render_node(context, output, node)
           # If we get an Interrupt that means the block must stop processing. An

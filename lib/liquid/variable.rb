@@ -110,7 +110,7 @@ module Liquid
 
     def render_to_output_buffer(context, output)
       obj = render(context)
-      render_obj_to_output(obj, output)
+      context.append_html_interpolation(output, obj, html_escaped: escaped?)
       output
     end
 
@@ -136,6 +136,11 @@ module Liquid
     end
 
     private
+
+    def escaped?
+      filter_name = @filters&.last&.first
+      filter_name == 'escape' || filter_name == 'escape_once' || filter_name == 'h'
+    end
 
     def lax_parse_filter_expressions(filter_name, unparsed_args)
       filter_args  = []

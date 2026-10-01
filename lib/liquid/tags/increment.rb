@@ -51,7 +51,7 @@ module Liquid
       value = counter_environment[@variable_name] || 0
       counter_environment[@variable_name] = value + 1
 
-      output << value.to_s
+      context.append_html_interpolation(output, value)
       output
     end
   end

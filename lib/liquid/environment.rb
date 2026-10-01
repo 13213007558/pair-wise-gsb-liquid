@@ -8,6 +8,9 @@ module Liquid
     # per-template basis.
     attr_accessor :error_mode
 
+    # When true, templates parsed by this environment use HTML safe rendering.
+    attr_accessor :html_safe
+
     # The tags that are available to use in the template.
     attr_accessor :tags
 
@@ -39,11 +42,12 @@ module Liquid
       #   render exceptions.
       # @yieldparam environment [Environment] The environment instance that is being built.
       # @return [Environment] The new environment instance.
-      def build(tags: nil, file_system: nil, error_mode: nil, exception_renderer: nil)
+      def build(tags: nil, file_system: nil, error_mode: nil, exception_renderer: nil, html_safe: nil)
         ret = new
         ret.tags = tags if tags
         ret.file_system = file_system if file_system
         ret.error_mode = error_mode if error_mode
+        ret.html_safe = html_safe unless html_safe.nil?
         ret.exception_renderer = exception_renderer if exception_renderer
         yield ret if block_given?
         ret.freeze
@@ -76,6 +80,7 @@ module Liquid
     def initialize
       @tags = Tags::STANDARD_TAGS.dup
       @error_mode = :lax
+      @html_safe = false
       @strainer_template = Class.new(StrainerTemplate).tap do |klass|
         klass.add_filter(StandardFilters)
       end

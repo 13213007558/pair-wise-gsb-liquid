@@ -63,6 +63,7 @@ module Liquid
         inner_context               = context.new_isolated_subcontext
         inner_context.template_name = partial.name
         inner_context.partial       = true
+        inner_context.html_safety   = context.html_safety
         inner_context['forloop']    = forloop if forloop
 
         @attributes.each do |key, value|

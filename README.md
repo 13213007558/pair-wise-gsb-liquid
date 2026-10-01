@@ -118,6 +118,15 @@ This is useful for doing things like enabling strict mode only in the theme edit
 It is recommended that you enable `:strict` or `:warn` mode on new apps to stop invalid templates from being created.
 It is also recommended that you use it in the template editors of existing apps to give editors better error messages.
 
+### HTML safe rendering
+
+Pass `html_safe: true` at parse or render time to contextually escape interpolated values.
+Text nodes escape HTML control characters, quoted attributes escape attribute delimiters, and recognized URL attributes neutralize dangerous schemes.
+Relative URLs and `http`/`https` URLs are recognized; unquoted attributes are rejected.
+
+The supported HTML subset intentionally rejects interpolation in tag names, attribute names, event handlers, `style`/`srcdoc` attributes, comments, declarations, and `script`/`style` text.
+Conditional branches share the current context, `capture` creates a reusable HTML fragment only for text context, and `render`/`include` continue the surrounding context across snippet boundaries.
+
 ### Undefined variables and filters
 
 By default, the renderer doesn't raise or in any other way notify you if some variables or filters are missing, i.e. not passed to the `render` method.

@@ -30,6 +30,10 @@ module Liquid
       @variable.render_to_output_buffer(context, +'')
     end
 
+    def render_to_output_buffer(context, output)
+      @variable.render_to_output_buffer(context, output)
+    end
+
     class ParseTreeVisitor < Liquid::ParseTreeVisitor
       def children
         [@node.variable]

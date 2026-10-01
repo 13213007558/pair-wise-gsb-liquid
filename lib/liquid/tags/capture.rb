@@ -51,7 +51,19 @@ module Liquid
 
     def render_to_output_buffer(context, output)
       context.resource_limits.with_capture do
-        capture_output = render(context)
+        capture_output = +''
+        if context.html_safety
+          context.html_safety.begin_capture
+          begin
+            @body.render_to_output_buffer(context, capture_output)
+            capture_output = context.html_safety.end_capture(capture_output)
+          rescue
+            context.html_safety.abort_capture
+            raise
+          end
+        else
+          @body.render_to_output_buffer(context, capture_output)
+        end
         context.scopes.last[@to] = capture_output
       end
       output
