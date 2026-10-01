@@ -156,6 +156,53 @@ integer-range `for` and `tablerow` loops, including loops with empty bodies. Thi
 iteration work when a score limit is configured; `render_length_limit` only bounds generated
 output and does not by itself limit CPU work for output-free loops.
 
+### Output source maps (optional)
+
+When debugging rendered output you can ask where selected output bytes came
+from — which variable, which template and line, and which filters they passed
+through. Rendering still returns a plain `String`; the provenance is exposed
+separately on the template:
+
+```ruby
+template = Liquid::Template.parse("Hi {{ user.name | upcase }}!", line_numbers: true)
+output   = template.render!({ 'user' => { 'name' => 'ada' } }, source_map: true)
+output         #=> "Hi ADA!"  (a plain String, as usual)
+map = template.source_map
+map.origins_at(3, 3).first
+#=> #<Liquid::SourceMap::Origin ...>
+#   .variable  #=> "user.name"
+#   .template  #=> template name (nil for the top-level template)
+#   .line_number #=> 1
+#   .filters   #=> ["upcase"]
+```
+
+`map.spans(start, length)` returns every recorded byte span intersecting a
+range. Spans are never merged, so the same value emitted twice (e.g. inside a
+loop) is reported as two separate spans, each with its own output range.
+
+Length-changing constructs are tracked as precisely as they can be:
+
+* filters with an exact byte mapping (`upcase`/`downcase`/`capitalize`,
+  `slice`, `truncate`, `strip`/`lstrip`/`rstrip`, `append`, `prepend`) map
+  individual output bytes back to input bytes; when an exact correspondence
+  cannot hold (for instance `upcase` growing a multibyte character), they
+  conservatively mark the whole output segment instead;
+* any other filter marks the whole segment as dependent — provenance never
+  invents per-character correspondences;
+* loop repetitions, `{% capture %}` output re-interpolated later, and values
+  passed with `{% render %}`/`{% include %}` all keep their provenance.
+
+A custom filter with the same argument layout as a built-in one can declare
+its mapping kind with `Liquid::SourceMap.register_exact_filter`:
+
+```ruby
+Liquid::SourceMap.register_exact_filter('my_slice', :slice)
+```
+
+Source maps store byte ranges and metadata (variable names, template names,
+line numbers, filter chains) only — they never retain a separate copy of a
+variable's raw value.
+
 ### Usage tracking
 
 To help track usages of a feature or code path in production, we have released opt-in usage tracking. To enable this, we provide an empty `Liquid:: Usage.increment` method which you can customize to your needs. The feature is well suited to https://github.com/Shopify/statsd-instrument. However, the choice of implementation is up to you.

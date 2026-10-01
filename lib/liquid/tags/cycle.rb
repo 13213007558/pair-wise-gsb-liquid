@@ -44,6 +44,11 @@ module Liquid
         val = val.to_s
       end
 
+      if context.source_trace && val.is_a?(String) && !val.is_a?(Liquid::SourceMap::TracedString)
+        expr = @variables[iteration]
+        val = context.source_trace.wrap_argument(val, expr, context, line_number)
+      end
+
       output << val
 
       iteration += 1

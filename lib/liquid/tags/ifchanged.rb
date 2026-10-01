@@ -3,7 +3,7 @@
 module Liquid
   class Ifchanged < Block
     def render_to_output_buffer(context, output)
-      block_output = +''
+      block_output = context.new_output_buffer
       super(context, block_output)
 
       if block_output != context.registers[:ifchanged]

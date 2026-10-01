@@ -65,8 +65,16 @@ module Liquid
         inner_context.partial       = true
         inner_context['forloop']    = forloop if forloop
 
+        trace = context.source_trace
         @attributes.each do |key, value|
-          inner_context[key] = context.evaluate(value)
+          evaluated = context.evaluate(value)
+          if trace && evaluated.is_a?(String) && !evaluated.is_a?(Liquid::SourceMap::TracedString)
+            evaluated = trace.wrap_argument(evaluated, value, inner_context, line_number)
+          end
+          inner_context[key] = evaluated
+        end
+        if trace && var.is_a?(String) && !var.is_a?(Liquid::SourceMap::TracedString)
+          var = trace.wrap_argument(var, @variable_name_expr, inner_context, line_number)
         end
         inner_context[context_variable_name] = var unless var.nil?
         partial.render_to_output_buffer(inner_context, output)

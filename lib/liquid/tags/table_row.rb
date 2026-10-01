@@ -90,7 +90,7 @@ module Liquid
 
       cols = @attributes.key?('cols') ? to_integer(context.evaluate(@attributes['cols'])) : length
 
-      output << "<tr class=\"row1\">\n"
+      context.trace_append(output, "<tr class=\"row1\">\n")
       context.resource_limits.increment_write_score(output)
       context.stack do
         tablerowloop = Liquid::TablerowloopDrop.new(length, cols)
@@ -99,9 +99,9 @@ module Liquid
         collection.each do |item|
           context[@variable_name] = item
 
-          output << "<td class=\"col#{tablerowloop.col}\">"
+          context.trace_append(output, "<td class=\"col#{tablerowloop.col}\">")
           super
-          output << '</td>'
+          context.trace_append(output, '</td>')
           context.resource_limits.increment_write_score(output)
 
           # Handle any interrupts if they exist.
@@ -111,7 +111,7 @@ module Liquid
           end
 
           if tablerowloop.col_last && !tablerowloop.last
-            output << "</tr>\n<tr class=\"row#{tablerowloop.row + 1}\">"
+            context.trace_append(output, "</tr>\n<tr class=\"row#{tablerowloop.row + 1}\">")
             context.resource_limits.increment_write_score(output)
           end
 
@@ -119,7 +119,7 @@ module Liquid
         end
       end
 
-      output << "</tr>\n"
+      context.trace_append(output, "</tr>\n")
       context.resource_limits.increment_write_score(output)
       output
     end

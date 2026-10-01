@@ -51,7 +51,11 @@ module Liquid
       value = counter_environment[@variable_name] || 0
       value -= 1
       counter_environment[@variable_name] = value
-      output << value.to_s
+      string = value.to_s
+      if context.source_trace
+        string = context.source_trace.tag_output!(string, 'decrement', context, line_number, raw)
+      end
+      output << string
       output
     end
   end

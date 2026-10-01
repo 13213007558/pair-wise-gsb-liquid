@@ -214,7 +214,7 @@ module Liquid
     end
 
     def render(context)
-      render_to_output_buffer(context, +'')
+      render_to_output_buffer(context, context.new_output_buffer)
     end
 
     def render_to_output_buffer(context, output)
@@ -225,6 +225,9 @@ module Liquid
       idx = 0
       while (node = @nodelist[idx])
         if node.instance_of?(String)
+          if (trace = context.source_trace)
+            trace.template_text!(output, node, context)
+          end
           output << node
         else
           render_node(context, output, node)

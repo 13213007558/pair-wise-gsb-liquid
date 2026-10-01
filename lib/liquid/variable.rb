@@ -98,7 +98,24 @@ module Liquid
     end
 
     def render(context)
+      trace = context.source_trace
+
       obj = context.evaluate(@name)
+
+      if trace
+        origin = trace.expression_origin(@name, context, @line_number)
+        obj = trace.enter(obj, origin)
+
+        @filters.each do |filter_name, filter_args, filter_kwargs|
+          filter_args = evaluate_traced_filter_expressions(context, trace, filter_args, filter_kwargs)
+          obj = trace.apply_filter(context, filter_name, obj, filter_args)
+        end
+
+        obj = trace.apply_global_filter(context.global_filter, obj) if context.global_filter
+        # Keep non-string results as boxes so {% assign %} stores the real
+        # value; stringification only happens when rendering to output.
+        return obj
+      end
 
       @filters.each do |filter_name, filter_args, filter_kwargs|
         filter_args = evaluate_filter_expressions(context, filter_args, filter_kwargs)
@@ -110,6 +127,7 @@ module Liquid
 
     def render_to_output_buffer(context, output)
       obj = render(context)
+      obj = context.source_trace.finalize(obj) if context.source_trace
       render_obj_to_output(obj, output)
       output
     end
@@ -118,6 +136,8 @@ module Liquid
       case obj
       when NilClass
         # Do nothing
+      when Liquid::SourceMap::TracedString
+        output << obj
       when Array
         obj.each do |o|
           render_obj_to_output(o, output)
@@ -195,6 +215,28 @@ module Liquid
 
     def evaluate_filter_expressions(context, filter_args, filter_kwargs)
       parsed_args = filter_args.map { |expr| context.evaluate(expr) }
+      if filter_kwargs
+        parsed_kwargs = {}
+        filter_kwargs.each do |key, expr|
+          parsed_kwargs[key] = context.evaluate(expr)
+        end
+        parsed_args << parsed_kwargs
+      end
+      parsed_args
+    end
+
+    # Like #evaluate_filter_expressions, but string-valued arguments keep
+    # provenance of their own expression. This lets e.g.
+    # `{{ secret | append: other }}` attribute the appended bytes to `other`.
+    def evaluate_traced_filter_expressions(context, trace, filter_args, filter_kwargs)
+      parsed_args = filter_args.map do |expr|
+        value = context.evaluate(expr)
+        if value.is_a?(String) && !value.is_a?(Liquid::SourceMap::TracedString)
+          trace.wrap_argument(value, expr, context, @line_number)
+        else
+          value
+        end
+      end
       if filter_kwargs
         parsed_kwargs = {}
         filter_kwargs.each do |key, expr|

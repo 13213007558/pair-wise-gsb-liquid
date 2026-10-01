@@ -35,7 +35,10 @@ module Liquid
       raise_tag_never_closed(block_name)
     end
 
-    def render_to_output_buffer(_context, output)
+    def render_to_output_buffer(context, output)
+      if context.source_trace
+        context.source_trace.template_text!(output, @body, context)
+      end
       output << @body
       output
     end

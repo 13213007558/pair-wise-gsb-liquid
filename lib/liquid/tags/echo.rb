@@ -27,7 +27,7 @@ module Liquid
     end
 
     def render(context)
-      @variable.render_to_output_buffer(context, +'')
+      @variable.render_to_output_buffer(context, context.new_output_buffer)
     end
 
     class ParseTreeVisitor < Liquid::ParseTreeVisitor

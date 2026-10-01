@@ -16,7 +16,7 @@ module Liquid
   #
   class Template
     attr_accessor :root, :name
-    attr_reader :resource_limits, :warnings
+    attr_reader :resource_limits, :warnings, :source_map
 
     attr_reader :profiler
 
@@ -164,11 +164,13 @@ module Liquid
       end
 
       output = nil
+      source_map_requested = false
 
       case args.last
       when Hash
         options = args.pop
         output  = options[:output] if options[:output]
+        source_map_requested = options[:source_map] == true
         static_registers = context.registers.static
 
         options[:registers]&.each do |key, register|
@@ -180,11 +182,32 @@ module Liquid
         context.add_filters(args.pop)
       end
 
+      caller_output = output
+
       # Retrying a render resets resource usage
       context.resource_limits.reset
 
       if @profiling && context.profiler.nil?
         @profiler = context.profiler = Liquid::Profiler.new
+      end
+
+      # Tracing is active when requested for this render or inherited from a
+      # parent render (the {% render %}/{% include %} tags render partials
+      # with the same context lineage).
+      tracing = source_map_requested || context.source_trace
+      if tracing
+        trace = context.source_trace ||= Liquid::SourceMap::RenderTrace.new
+        if output.is_a?(Liquid::SourceMap::TracedString)
+          # Caller-provided traced buffer: append into it.
+        elsif output
+          output = Liquid::SourceMap::TracedString.new(output)
+        else
+          output = trace.new_buffer
+        end
+        @source_map = nil if source_map_requested
+      else
+        @source_map = nil
+        output ||= +''
       end
 
       context.template_name ||= name
@@ -194,7 +217,17 @@ module Liquid
 
       begin
         # render the nodelist.
-        @root.render_to_output_buffer(context, output || +'')
+        @root.render_to_output_buffer(context, output)
+        if source_map_requested
+          @source_map = Liquid::SourceMap::SourceMap.new(output.trace_nodes, output.bytesize, name)
+        end
+        if caller_output && !caller_output.equal?(output)
+          # A plain caller-provided buffer was wrapped for tracing; the
+          # wrapper already contains its prefix, so append only what this
+          # render added to keep render_to_output_buffer semantics.
+          caller_output << output.byteslice(caller_output.bytesize..)
+        end
+        source_map_requested ? String.new(output) : output
       rescue Liquid::MemoryError => e
         context.handle_error(e)
       ensure

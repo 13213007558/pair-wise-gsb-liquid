@@ -76,8 +76,10 @@ module Liquid
     private
 
     def assign_score_of(val)
-      if val.instance_of?(String)
+      if val.is_a?(String)
         val.bytesize
+      elsif val.is_a?(Liquid::SourceMap::TracedBox)
+        assign_score_of(val.value)
       elsif val.instance_of?(Array)
         sum = 1
         # Uses #each to avoid extra allocations.

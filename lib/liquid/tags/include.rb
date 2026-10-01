@@ -60,17 +60,22 @@ module Liquid
         context.partial = true
 
         context.stack do
+          trace = context.source_trace
           @attributes.each do |key, value|
-            context[key] = context.evaluate(value)
+            evaluated = context.evaluate(value)
+            if trace && evaluated.is_a?(String) && !evaluated.is_a?(Liquid::SourceMap::TracedString)
+              evaluated = trace.wrap_argument(evaluated, value, context, line_number)
+            end
+            context[key] = evaluated
           end
 
           if variable.is_a?(Array)
             variable.each do |var|
-              context[context_variable_name] = var
+              context[context_variable_name] = traced_render_var(trace, var, context)
               partial.render_to_output_buffer(context, output)
             end
           else
-            context[context_variable_name] = variable
+            context[context_variable_name] = traced_render_var(trace, variable, context)
             partial.render_to_output_buffer(context, output)
           end
         end
@@ -88,6 +93,15 @@ module Liquid
     def for_loop?
       @is_for_loop
     end
+
+    def traced_render_var(trace, var, context)
+      if trace && var.is_a?(String) && !var.is_a?(Liquid::SourceMap::TracedString)
+        trace.wrap_argument(var, @variable_name_expr, context, line_number)
+      else
+        var
+      end
+    end
+    private :traced_render_var
 
     def strict2_parse(markup)
       p = @parse_context.new_parser(markup)
