@@ -8,6 +8,34 @@ class ThingWithValue < Liquid::Drop
   end
 end
 
+class SinglePassStream
+  class RepeatedEnumeration < StandardError; end
+
+  attr_reader :enumerations, :consumed
+
+  def initialize(items)
+    @items = items
+    @enumerations = 0
+    @consumed = []
+  end
+
+  def to_liquid
+    self
+  end
+
+  def each
+    unless @enumerations.zero?
+      raise RepeatedEnumeration, "stream cannot be enumerated more than once"
+    end
+
+    @enumerations += 1
+    @items.each do |item|
+      @consumed << item
+      yield item
+    end
+  end
+end
+
 class ForTagTest < Minitest::Test
   include Liquid
 
@@ -36,6 +64,228 @@ HERE
   def test_for_reversed
     assigns = { 'array' => [1, 2, 3] }
     assert_template_result('321', '{%for item in array reversed %}{{item}}{%endfor%}', assigns)
+  end
+
+  def test_streaming_for_does_not_buffer_a_limit_segment
+    stream = SinglePassStream.new([1, 2, 3, 4, 5])
+    template = Template.parse(
+      '{%for item in array stream:true limit:2 %}{{ item }}{%endfor%}',
+    )
+
+    assert_equal('12', template.render!('array' => stream))
+    assert_equal([1, 2], stream.consumed)
+    assert_equal(1, stream.enumerations)
+  end
+
+  def test_streaming_limit_and_offset
+    stream = SinglePassStream.new([1, 2, 3, 4, 5])
+    template = Template.parse(
+      '{%for item in array stream:true offset:1 limit:2 %}{{ item }}{%endfor%}',
+    )
+
+    assert_equal('23', template.render!('array' => stream))
+    assert_equal([1, 2, 3], stream.consumed)
+    assert_equal(1, stream.enumerations)
+  end
+
+  def test_streaming_last_uses_at_most_one_lookahead_item
+    stream = SinglePassStream.new([1, 2, 3])
+    template = Template.parse(
+      '{%for item in array stream:true %}{{forloop.last}}{%endfor%}',
+    )
+
+    assert_equal('falsefalsetrue', template.render!('array' => stream))
+    assert_equal([1, 2, 3], stream.consumed)
+  end
+
+  def test_streaming_continue_resumes_without_enumerating_again
+    stream = SinglePassStream.new([1, 2, 3, 4, 5, 6])
+    template = Template.parse(
+      '{%for item in array stream:true limit:3 %}{{ item }}{%endfor%}' \
+      '{%for item in array offset:continue stream:true limit:3 %}{{ item }}{%endfor%}',
+    )
+
+    assert_equal('123456', template.render!('array' => stream))
+    assert_equal(1, stream.enumerations)
+  end
+
+  def test_streaming_break_resumes_after_the_current_limit_segment
+    stream = SinglePassStream.new([1, 2, 3, 4, 5, 6])
+    template = Template.parse(
+      '{%for item in array stream:true limit:3 %}' \
+      '{{ item }}{% if item == 1 %}{% break %}{% endif %}' \
+      '{%endfor%}' \
+      '{%for item in array offset:continue stream:true limit:3 %}{{ item }}{%endfor%}',
+    )
+
+    assert_equal('1456', template.render!('array' => stream))
+    assert_equal(1, stream.enumerations)
+  end
+
+  def test_array_break_and_continue_keep_original_segment_position
+    assigns = { 'array' => [1, 2, 3, 4, 5, 6] }
+    template =
+      '{%for item in array limit:3 %}' \
+      '{{ item }}{% if item == 1 %}{% break %}{% endif %}' \
+      '{%endfor%}' \
+      '{%for item in array offset:continue limit:3 %}{{ item }}{%endfor%}'
+
+    assert_template_result('1456', template, assigns)
+  end
+
+  def test_streaming_break_without_limit_resumes_from_the_next_item
+    stream = SinglePassStream.new([1, 2, 3, 4])
+    template = Template.parse(
+      '{%for item in array stream:true %}' \
+      '{{ item }}{% break %}' \
+      '{%endfor%}' \
+      '{%for item in array offset:continue stream:true %}{{ item }}{%endfor%}',
+    )
+
+    assert_equal('1234', template.render!('array' => stream))
+    assert_equal(1, stream.enumerations)
+  end
+
+  def test_streaming_explicit_restart_raises_from_single_pass_source
+    stream = SinglePassStream.new([1, 2, 3])
+    template = Template.parse(
+      '{%for item in array stream:true limit:1 %}{{ item }}{%endfor%}' \
+      '{%for item in array offset:0 stream:true limit:1 %}{{ item }}{%endfor%}',
+    )
+
+    assert_raises(SinglePassStream::RepeatedEnumeration) do
+      template.render!('array' => stream)
+    end
+    assert_equal([1], stream.consumed)
+  end
+
+  def test_streaming_inner_break_does_not_break_outer_stream
+    outer = SinglePassStream.new([
+      SinglePassStream.new([1, 2]),
+      SinglePassStream.new([3, 4]),
+    ])
+    template = Template.parse(
+      '{%for item in outer stream:true %}' \
+      '{%for child in item stream:true %}{{ child }}{% break %}{%endfor%}' \
+      '{%endfor%}',
+    )
+
+    assert_equal('13', template.render!('outer' => outer))
+    assert_equal(1, outer.enumerations)
+    outer.consumed.each { |child| assert_equal(1, child.enumerations) }
+  end
+
+  def test_streaming_continue_consumes_each_iteration
+    stream = SinglePassStream.new([1, 2, 3, 4])
+    template = Template.parse(
+      '{%for item in array stream:true %}' \
+      '{% if item == 2 or item == 4 %}{{ item }}{% else %}{% continue %}{% endif %}' \
+      '{%endfor%}',
+    )
+
+    assert_equal('24', template.render!('array' => stream))
+    assert_equal([1, 2, 3, 4], stream.consumed)
+  end
+
+  def test_streaming_empty_stream_enters_else_after_one_enumeration
+    stream = SinglePassStream.new([])
+    template = Template.parse(
+      '{%for item in array stream:true %}body{%else%}else{%endfor%}',
+    )
+
+    assert_equal('else', template.render!('array' => stream))
+    assert_equal(1, stream.enumerations)
+    assert_empty(stream.consumed)
+  end
+
+  def test_streaming_zero_limit_advances_the_offset_position
+    stream = SinglePassStream.new([1, 2, 3])
+    template = Template.parse(
+      '{%for item in array stream:true limit:0 %}{{ item }}{%else%}zero{%endfor%}' \
+      '{%for item in array offset:continue stream:true limit:1 %}{{ item }}{%endfor%}',
+    )
+
+    assert_equal('zero1', template.render!('array' => stream))
+    assert_equal([1], stream.consumed)
+  end
+
+  def test_streaming_unknown_length_metadata_raises_without_draining_input
+    stream = SinglePassStream.new([1, 2, 3])
+    template = Template.parse(
+      '{%for item in array stream:true %}{{ forloop.length }}{%endfor%}',
+    )
+
+    error = assert_raises(Liquid::ArgumentError) { template.render!('array' => stream) }
+    assert_match(/length metadata is not supported/, error.message)
+    assert_empty(stream.consumed)
+  end
+
+  def test_streaming_unknown_rindex_raises_without_draining_input
+    stream = SinglePassStream.new([1, 2, 3])
+    template = Template.parse(
+      '{%for item in array stream:true %}{{ forloop.rindex }}{%endfor%}',
+    )
+
+    assert_raises(Liquid::ArgumentError) { template.render!('array' => stream) }
+    assert_empty(stream.consumed)
+  end
+
+  def test_streaming_reversed_is_explicitly_unsupported
+    stream = SinglePassStream.new([1, 2, 3])
+    template = Template.parse(
+      '{%for item in array reversed stream:true %}{{ item }}{%endfor%}',
+    )
+
+    error = assert_raises(Liquid::ArgumentError) { template.render!('array' => stream) }
+    assert_match(/reversed is not supported in streaming for loops/, error.message)
+    assert_equal(0, stream.enumerations)
+  end
+
+  def test_streaming_nested_loops
+    outer = SinglePassStream.new([
+      SinglePassStream.new([1, 2]),
+      SinglePassStream.new([3, 4]),
+    ])
+    template = Template.parse(
+      '{%for item in outer stream:true %}' \
+      '{%for child in item stream:true %}{{ child }}{%endfor%}' \
+      '{%endfor%}',
+    )
+
+    assert_equal('1234', template.render!('outer' => outer))
+    assert_equal(1, outer.enumerations)
+    outer.consumed.each { |child| assert_equal(1, child.enumerations) }
+  end
+
+  def test_streaming_can_be_enabled_with_streaming_alias_and_bare_keyword
+    assigns = { 'array' => [1, 2, 3] }
+    assert_template_result('123', '{%for item in array streaming:true %}{{ item }}{%endfor%}', assigns)
+    assert_template_result('123', '{%for item in array stream %}{{ item }}{%endfor%}', assigns)
+  end
+
+  def test_stream_false_keeps_ordinary_array_for_behavior
+    assigns = { 'array' => [1, 2, 3] }
+    assert_template_result('321', '{%for item in array reversed stream:false %}{{ item }}{%endfor%}', assigns)
+  end
+
+  def test_streaming_integer_range_has_known_metadata
+    template = Template.parse(
+      '{%for item in numbers stream:true offset:1 limit:2 %}' \
+      '{{ item }}:{{forloop.length}}:{{forloop.rindex}}{%endfor%}',
+    )
+
+    assert_equal('2:2:23:2:1', template.render!('numbers' => 1..3))
+  end
+
+  def test_streaming_uses_each_instead_of_load_slice
+    loader = LoaderDrop.new([1, 2, 3])
+    template = Template.parse(
+      '{%for item in items stream:true limit:2 %}{{ item }}{%endfor%}',
+    )
+
+    assert_equal('12', template.render!('items' => loader))
+    assert(loader.each_called)
+    refute(loader.load_slice_called)
   end
 
   def test_for_with_range

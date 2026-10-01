@@ -7,11 +7,12 @@ module Liquid
   # @liquid_summary
   #   Information about a parent [`for` loop](/docs/api/liquid/tags/for).
   class ForloopDrop < Drop
-    def initialize(name, length, parentloop)
+    def initialize(name, length, parentloop, &last_check)
       @name       = name
       @length     = length
       @parentloop = parentloop
       @index      = 0
+      @last_check = last_check
     end
 
     # @liquid_public_docs
@@ -19,7 +20,10 @@ module Liquid
     # @liquid_summary
     #   The total number of iterations in the loop.
     # @liquid_return [number]
-    attr_reader :length
+    def length
+      raise_unknown_length!
+      @length
+    end
 
     # @liquid_public_docs
     # @liquid_name parentloop
@@ -53,6 +57,7 @@ module Liquid
     #   The 1-based index of the current iteration, in reverse order.
     # @liquid_return [number]
     def rindex
+      raise_unknown_length!
       @length - @index
     end
 
@@ -61,6 +66,7 @@ module Liquid
     #   The 0-based index of the current iteration, in reverse order.
     # @liquid_return [number]
     def rindex0
+      raise_unknown_length!
       @length - @index - 1
     end
 
@@ -77,13 +83,25 @@ module Liquid
     #   Returns `true` if the current iteration is the last. Returns `false` if not.
     # @liquid_return [boolean]
     def last
-      @index == @length - 1
+      if @length
+        @index == @length - 1
+      else
+        @last_check.call
+      end
     end
 
     protected
 
     def increment!
       @index += 1
+    end
+
+    private
+
+    def raise_unknown_length!
+      return unless @length.nil?
+
+      raise ArgumentError, "forloop length metadata is not supported by streaming for loops with unknown length"
     end
   end
 end
