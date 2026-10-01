@@ -86,4 +86,37 @@ module Liquid
       @index += 1
     end
   end
+
+  # A ForloopDrop for loops that stream a collection of unknown length.
+  # The total length is never known without draining the stream, so the
+  # length-dependent methods raise instead of silently consuming it.
+  # `last` is still available: the loop looks ahead at most one item.
+  class StreamingForloopDrop < ForloopDrop
+    def initialize(name, parentloop)
+      super(name, nil, parentloop)
+      @last = false
+    end
+
+    def length
+      raise ArgumentError, "forloop.length is not supported when streaming a collection of unknown length"
+    end
+
+    def rindex
+      raise ArgumentError, "forloop.rindex is not supported when streaming a collection of unknown length"
+    end
+
+    def rindex0
+      raise ArgumentError, "forloop.rindex0 is not supported when streaming a collection of unknown length"
+    end
+
+    def last
+      @last
+    end
+
+    protected
+
+    def last=(is_last)
+      @last = is_last
+    end
+  end
 end

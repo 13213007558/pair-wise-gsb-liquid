@@ -26,6 +26,20 @@ module Liquid
     # template can consume.
     attr_accessor :default_resource_limits
 
+    # When enabled, `for` loops over stream-like collections (anything that
+    # responds to `each` but is not an Array, Range, String, or Hash) consume
+    # the collection lazily, pulling one item at a time with at most one item
+    # of lookahead, instead of buffering the whole collection into an array
+    # before rendering the first item.
+    #
+    # Streamed loops do not know the total number of items, so
+    # `forloop.length`, `forloop.rindex`, `forloop.rindex0`, and the
+    # `reversed` option raise an error instead of silently draining the
+    # stream. `forloop.last` is still available thanks to the single lookahead
+    # item. Arrays and other sized collections keep the existing buffered
+    # behavior.
+    attr_accessor :streaming_for_loop
+
     class << self
       # Creates a new environment instance.
       #
@@ -82,6 +96,7 @@ module Liquid
       @exception_renderer = ->(exception) { exception }
       @file_system = BlankFileSystem.new
       @default_resource_limits = Const::EMPTY_HASH
+      @streaming_for_loop = false
       @strainer_template_class_cache = {}
     end
 
