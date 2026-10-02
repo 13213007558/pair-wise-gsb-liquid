@@ -4,6 +4,9 @@ module Liquid
   class Block < Tag
     MAX_DEPTH = 100
 
+    # @api private
+    attr_reader :body
+
     def initialize(tag_name, markup, options)
       super
       @blank = true

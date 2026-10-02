@@ -156,6 +156,42 @@ integer-range `for` and `tablerow` loops, including loops with empty bodies. Thi
 iteration work when a score limit is configured; `render_length_limit` only bounds generated
 output and does not by itself limit CPU work for output-free loops.
 
+### Partial evaluation (preprocessing templates)
+
+When part of a template's variables are known long before it is rendered (for example a brand
+configuration baked in at deploy time, while the recipient is only known at send time), a parsed
+template can be *specialized* into a residual template that still renders normally:
+
+```ruby
+template = Liquid::Template.parse("Hello {{ brand.name }}, {{ customer.name }}!")
+residual = template.specialize("brand" => { "name" => "Acme" })
+residual.render("customer" => { "name" => "Sam" }) # => "Hello Acme, Sam!"
+```
+
+Constants, conditions fully determined by the known variables, finite loops over known collections,
+and `assign`/`capture` with known values are collapsed. The residual template is output- and
+error-equivalent to the original for every assignment of the remaining variables; unknown branches
+are retained rather than guessed from sample input. Drop methods, dynamic `include`/`render`, and
+custom tags are never executed during preprocessing.
+
+Only filters explicitly registered as *pure* (side-effect-free functions of their arguments) are
+applied while specializing. A conservative set of standard filters is pre-registered; register
+your own on the environment:
+
+```ruby
+environment.register_pure_filter(:shout)
+# or restrict a single specialize call:
+template.specialize(known, pure_filters: %w[upcase downcase])
+```
+
+To understand why preprocessing did not eliminate work, the residual template carries a report:
+
+```ruby
+residual.specialization_info.expressions # => [" customer.name "]
+residual.specialization_info.summary     # => {"output" => 1}
+residual.residual_source               # => "Hello {{ \"Acme\" }}, {{ customer.name }}!"
+```
+
 ### Usage tracking
 
 To help track usages of a feature or code path in production, we have released opt-in usage tracking. To enable this, we provide an empty `Liquid:: Usage.increment` method which you can customize to your needs. The feature is well suited to https://github.com/Shopify/statsd-instrument. However, the choice of implementation is up to you.

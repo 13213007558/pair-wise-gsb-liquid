@@ -26,6 +26,10 @@ module Liquid
     # template can consume.
     attr_accessor :default_resource_limits
 
+    # Filters registered as pure and therefore safe to execute when a template
+    # is partially evaluated against known variables. See {PureFilterRegistry}.
+    attr_reader :pure_filters
+
     class << self
       # Creates a new environment instance.
       #
@@ -83,6 +87,23 @@ module Liquid
       @file_system = BlankFileSystem.new
       @default_resource_limits = Const::EMPTY_HASH
       @strainer_template_class_cache = {}
+      @pure_filters = PureFilterRegistry.new
+    end
+
+    # Registers one or more filters as safe to execute during partial
+    # evaluation. Only register filters that are pure functions of their
+    # arguments and never touch context, registers or external state.
+    #
+    #   environment.register_pure_filter(:upcase, :downcase)
+    def register_pure_filter(*names)
+      @pure_filters.register(*names)
+      self
+    end
+
+    # Unregisters filters previously allowed during partial evaluation.
+    def unregister_pure_filter(*names)
+      @pure_filters.unregister(*names)
+      self
     end
 
     # Registers a new tag with the environment.
