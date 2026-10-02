@@ -156,6 +156,36 @@ integer-range `for` and `tablerow` loops, including loops with empty bodies. Thi
 iteration work when a score limit is configured; `render_length_limit` only bounds generated
 output and does not by itself limit CPU work for output-free loops.
 
+### Partial evaluation (preprocessing with known variables)
+
+`Liquid::PartialEvaluator` folds a template against the variables you already know and
+produces a *residual template* that you render later with the remaining variables. A typical
+case is an email template whose brand configuration is known at publish time while the
+recipient data only exists at send time:
+
+```ruby
+evaluator = Liquid::PartialEvaluator.new(pure_filters: %w[upcase date])
+result = evaluator.evaluate(source, "brand" => { "name" => "Acme", "vip" => true })
+
+result.source    # => residual template (brand work folded away)
+result.template  # => Liquid::Template for the residual source
+result.template.render("recipient" => { "name" => "Tobi" })
+```
+
+Folding guarantees:
+
+* Constants, `if`/`unless`/`case` conditions and bounded `for` loops are folded when every
+  value they depend on is known. Unknown branches are kept, never pruned by guessing.
+* Only filters explicitly registered via `pure_filters` run during preprocessing.
+* Drop methods, `include`/`render`, and stateful or custom tags (`cycle`, `increment`,
+  `ifchanged`, ...) are never executed during preprocessing; they are preserved verbatim.
+* Rendering the residual template with any remaining assigns produces the same output (and
+  the same render-time errors) as rendering the original with all assigns combined.
+
+`result.preserved` lists every expression/tag that was left for render time, with its
+markup, line number and reason (e.g. `:unknown_variables`, `:unregistered_filter`,
+`:loop_not_foldable`), so you can see why preprocessing did or did not pay off.
+
 ### Usage tracking
 
 To help track usages of a feature or code path in production, we have released opt-in usage tracking. To enable this, we provide an empty `Liquid:: Usage.increment` method which you can customize to your needs. The feature is well suited to https://github.com/Shopify/statsd-instrument. However, the choice of implementation is up to you.
